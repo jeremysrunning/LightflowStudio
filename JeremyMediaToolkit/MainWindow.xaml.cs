@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private string? _ffmpeg;
     private string? _ffprobe;
     private CancellationTokenSource? _cts;
+    private readonly BatchProgressState _batchProgress = new();
 
     public MainWindow()
     {
@@ -83,10 +84,8 @@ public partial class MainWindow : Window
                 .Where(p => new[] { ".mp4", ".mov", ".mkv", ".mxf" }.Contains(Path.GetExtension(p).ToLowerInvariant()))
                 .Where(p => !p.Contains($"{Path.DirectorySeparatorChar}Toolkit-", StringComparison.OrdinalIgnoreCase)).Order().ToList();
             if (files.Count == 0) throw new InvalidOperationException("No supported video files were found.");
-
-            BatchProgress.Value = 0;
-            FileProgress.Value = 0;
-            EtaText.Text = $"Completed 0 of {files.Count} — estimated remaining: calculating…";
+            _batchProgress.StartBatch(files.Count);
+            ApplyProgressState();
 
             var mode = RecoveryMode.SelectedIndex;
             var suffix = mode == 1 ? "-Salvage" : mode == 2 ? "-VideoOnly" : "";
@@ -103,7 +102,8 @@ public partial class MainWindow : Window
                 var outDir = Path.Combine(outputRoot, relativeDir);
                 Directory.CreateDirectory(outDir);
                 var output = Path.Combine(outDir, Path.GetFileNameWithoutExtension(input) + $"_{resName}.mp4");
-                FileProgress.Value = 0;
+                _batchProgress.StartFile();
+                FileProgress.Value = _batchProgress.FilePercent;
                 CurrentFileText.Text = $"{completed + 1}/{files.Count}: {Path.GetFileName(input)}";
                 if (SkipExisting.IsChecked == true && File.Exists(output) && new FileInfo(output).Length > 0)
                 {
@@ -111,7 +111,11 @@ public partial class MainWindow : Window
                 }
                 var duration = await ProbeDurationAsync(input, _cts.Token);
                 var args = BuildEncodeArguments(input, output, LutPath.Text, mode);
-                var exit = await RunFfmpegProgressAsync(args, duration, p => FileProgress.Value = p, _cts.Token);
+                var exit = await RunFfmpegProgressAsync(args, duration, p =>
+                {
+                    _batchProgress.ReportFileProgress(p);
+                    FileProgress.Value = _batchProgress.FilePercent;
+                }, _cts.Token);
                 if (exit == 0) AppendLog($"Completed: {output}"); else AppendLog($"FAILED ({exit}): {input}");
                 completed++; UpdateBatch(completed, files.Count, batchStart);
             }
@@ -163,9 +167,16 @@ public partial class MainWindow : Window
 
     private void UpdateBatch(int completed, int total, Stopwatch sw)
     {
-        BatchProgress.Value = completed * 100d / total;
+        _batchProgress.ReportBatchProgress(completed, total);
+        BatchProgress.Value = _batchProgress.BatchPercent;
         var remaining = completed == 0 ? TimeSpan.Zero : TimeSpan.FromTicks(sw.Elapsed.Ticks * (total - completed) / completed);
         EtaText.Text = $"Completed {completed} of {total} — estimated remaining: {remaining:hh\\:mm\\:ss}";
+    }
+    private void ApplyProgressState()
+    {
+        BatchProgress.Value = _batchProgress.BatchPercent;
+        FileProgress.Value = _batchProgress.FilePercent;
+        EtaText.Text = _batchProgress.StatusText;
     }
     private void ToggleEncoding(bool running) { StartButton.IsEnabled = !running; CancelButton.IsEnabled = running; }
     private void Cancel_Click(object sender, RoutedEventArgs e) => _cts?.Cancel();
