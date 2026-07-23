@@ -84,16 +84,16 @@
         <Grid>
          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
          <TextBlock Style="{StaticResource SectionTitle}" Margin="4,0,4,12" Text="Encoding Progress"/>
-         <DockPanel Grid.Row="1" Margin="4,0,4,4"><TextBlock Foreground="{StaticResource MutedTextBrush}" Text="Current file"/><TextBlock DockPanel.Dock="Right" Foreground="{StaticResource OrangeBrush}" Text="ACTIVE"/></DockPanel>
+         <DockPanel Grid.Row="1" Margin="4,0,4,4" LastChildFill="False"><TextBlock Foreground="{StaticResource MutedTextBrush}" Text="Current file"/><TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Foreground="{StaticResource OrangeBrush}" Text="ACTIVE"/></DockPanel>
          <ProgressBar Grid.Row="2" x:Name="FileProgress" Style="{StaticResource FileProgressStyle}" Maximum="100"/>
-         <DockPanel Grid.Row="3" Margin="4,14,4,4"><TextBlock Foreground="{StaticResource MutedTextBrush}" Text="Overall batch"/><TextBlock DockPanel.Dock="Right" x:Name="EtaText" Foreground="{StaticResource MutedTextBrush}"/></DockPanel>
+         <DockPanel Grid.Row="3" Margin="4,14,4,4" LastChildFill="False"><TextBlock Foreground="{StaticResource MutedTextBrush}" Text="Overall batch"/><TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" x:Name="EtaText" Foreground="{StaticResource MutedTextBrush}"/></DockPanel>
          <ProgressBar Grid.Row="4" x:Name="BatchProgress" Maximum="100"/>
         </Grid>
        </Border>
        <Border Grid.Row="1" Style="{StaticResource Card}">
         <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
          <TextBlock Style="{StaticResource SectionTitle}" Margin="4,0,4,10" Text="Activity Log"/>
-         <TextBox Grid.Row="1" x:Name="LogBox" Height="150" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Cascadia Mono, Consolas" FontSize="12" VerticalScrollBarVisibility="Auto"/>
+         <TextBox Grid.Row="1" x:Name="LogBox" Height="150" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Cascadia Mono, Consolas" FontSize="12" VerticalContentAlignment="Top" HorizontalContentAlignment="Left" VerticalScrollBarVisibility="Auto"/>
         </Grid>
        </Border>
       </Grid>
@@ -113,7 +113,7 @@
        <WrapPanel><Button Content="Inspect Metadata" Click="Inspect_Click"/><Button Content="Verify / CSV Report" Click="Verify_Click"/><Button Content="Lossless Rewrap" Click="Rewrap_Click"/><Button Content="Create 1080p Proxy" Click="Proxy_Click"/><Button Content="Generate Contact Sheet" Click="ContactSheet_Click"/></WrapPanel>
       </StackPanel>
      </Border>
-     <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Style="{StaticResource SectionTitle}" Margin="4,0,4,10" Text="Tool Output"/><TextBox Grid.Row="1" x:Name="ToolsOutput" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Cascadia Mono, Consolas" FontSize="12" VerticalScrollBarVisibility="Auto"/></Grid></Border>
+     <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Style="{StaticResource SectionTitle}" Margin="4,0,4,10" Text="Tool Output"/><TextBox Grid.Row="1" x:Name="ToolsOutput" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Cascadia Mono, Consolas" FontSize="12" VerticalContentAlignment="Top" HorizontalContentAlignment="Left" VerticalScrollBarVisibility="Auto"/></Grid></Border>
     </Grid>
    </TabItem>
 

@@ -251,7 +251,15 @@ public partial class MainWindow : Window
         BatchStateText.Foreground = (System.Windows.Media.Brush)FindResource(running ? "OrangeBrush" : "SuccessBrush");
     }
     private void Cancel_Click(object sender, RoutedEventArgs e) => _cts?.Cancel();
-    private void AppendLog(string text) { Dispatcher.Invoke(() => { LogBox.AppendText(text.TrimEnd() + Environment.NewLine); LogBox.ScrollToEnd(); }); }
+    private void AppendLog(string text)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            LogBox.Text = ActivityLog.Prepend(LogBox.Text, text);
+            LogBox.CaretIndex = 0;
+            LogBox.ScrollToHome();
+        });
+    }
 
     private async Task<double> ProbeDurationAsync(string file, CancellationToken token)
     {
