@@ -1,0 +1,51 @@
+<Window x:Class="JeremyMediaToolkit.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Jeremy Media Toolkit v0.2" Height="760" Width="1040"
+ MinHeight="650" MinWidth="900" WindowStartupLocation="CenterScreen">
+ <Grid Margin="14">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <DockPanel Margin="0,0,0,10"><TextBlock FontSize="25" FontWeight="SemiBold" Text="Jeremy Media Toolkit"/>
+   <Button DockPanel.Dock="Right" Content="FFmpeg Settings" Click="Settings_Click"/></DockPanel>
+  <TabControl Grid.Row="1">
+   <TabItem Header="Batch Encode"><ScrollViewer VerticalScrollBarVisibility="Auto"><Grid Margin="12">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <Grid.RowDefinitions>
+     <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+     <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+     <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+    <TextBlock Grid.Row="0" VerticalAlignment="Center" Text="Video folder"/><TextBox x:Name="InputFolder" Grid.Row="0" Grid.Column="1"/>
+    <Button Grid.Row="0" Grid.Column="2" Content="Browse…" Click="BrowseInput_Click"/>
+    <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="LUT (.cube)"/><TextBox x:Name="LutPath" Grid.Row="1" Grid.Column="1"/>
+    <Button Grid.Row="1" Grid.Column="2" Content="Browse…" Click="BrowseLut_Click"/>
+    <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="Resolution"/><ComboBox x:Name="Resolution" Grid.Row="2" Grid.Column="1" SelectedIndex="0">
+     <ComboBoxItem Content="1080p"/><ComboBoxItem Content="4K UHD"/><ComboBoxItem Content="Source resolution"/></ComboBox>
+    <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="Recovery mode"/><ComboBox x:Name="RecoveryMode" Grid.Row="3" Grid.Column="1" SelectedIndex="0">
+     <ComboBoxItem Content="Normal"/><ComboBoxItem Content="Salvage audio + video"/><ComboBoxItem Content="Video only"/></ComboBox>
+    <CheckBox x:Name="Recursive" Grid.Row="4" Grid.Column="1" Margin="5" Content="Include subfolders"/>
+    <CheckBox x:Name="SkipExisting" Grid.Row="5" Grid.Column="1" Margin="5" IsChecked="True" Content="Skip completed output files"/>
+    <StackPanel Grid.Row="6" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Left">
+     <Button x:Name="StartButton" Content="Start Encoding" Click="Start_Click"/><Button x:Name="CancelButton" Content="Cancel" IsEnabled="False" Click="Cancel_Click"/>
+    </StackPanel>
+    <TextBlock Grid.Row="7" Grid.ColumnSpan="3" x:Name="CurrentFileText" Margin="4" Text="Ready" TextTrimming="CharacterEllipsis"/>
+    <ProgressBar Grid.Row="8" Grid.ColumnSpan="3" x:Name="FileProgress" Height="18" Margin="4" Maximum="100"/>
+    <ProgressBar Grid.Row="9" Grid.ColumnSpan="3" x:Name="BatchProgress" Height="18" Margin="4" Maximum="100"/>
+    <TextBlock Grid.Row="10" Grid.ColumnSpan="3" x:Name="EtaText" Margin="4"/>
+    <TextBox Grid.Row="11" Grid.ColumnSpan="3" x:Name="LogBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
+   </Grid></ScrollViewer></TabItem>
+   <TabItem Header="Media Tools"><Grid Margin="12">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <TextBlock TextWrapping="Wrap" Text="Select a video file, then inspect its metadata, verify decoding, rewrap it without transcoding, or create a 1080p editing proxy."/>
+    <DockPanel Grid.Row="1"><Button DockPanel.Dock="Right" Content="Browse…" Click="BrowseMedia_Click"/><TextBox x:Name="MediaPath"/></DockPanel>
+    <WrapPanel Grid.Row="2"><Button Content="Inspect Metadata" Click="Inspect_Click"/><Button Content="Verify / CSV Report" Click="Verify_Click"/>
+     <Button Content="Lossless Rewrap" Click="Rewrap_Click"/><Button Content="Create 1080p Proxy" Click="Proxy_Click"/><Button Content="Generate Contact Sheet" Click="ContactSheet_Click"/></WrapPanel>
+    <TextBox Grid.Row="3" x:Name="ToolsOutput" Margin="4" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
+   </Grid></TabItem>
+   <TabItem Header="Premiere Helper"><StackPanel Margin="18">
+    <TextBlock FontSize="18" FontWeight="SemiBold" Text="Experimental Premiere timeline clip exporter"/>
+    <TextBlock Margin="0,8" TextWrapping="Wrap" Text="The included ExtendScript helper exports each clip on video track V1 as an individual file using sequence In/Out points. Visible timeline effects and adjustment layers are included. Test on a duplicate project first."/>
+    <Button HorizontalAlignment="Left" Content="Open Premiere Helper Folder" Click="OpenPremiere_Click"/>
+   </StackPanel></TabItem>
+  </TabControl>
+  <StatusBar Grid.Row="2"><TextBlock x:Name="StatusText" Text="Checking FFmpeg…"/></StatusBar>
+ </Grid>
+</Window>

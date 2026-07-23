@@ -1,0 +1,4 @@
+Copyright (c) 2026 Jeremy Running Photography. All rights reserved.
+
+This project package is provided for the owner's personal and business use.
+FFmpeg and Adobe Premiere Pro are separate products governed by their own licenses.
