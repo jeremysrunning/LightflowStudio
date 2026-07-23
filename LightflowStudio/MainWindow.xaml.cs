@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
@@ -21,6 +22,7 @@ public partial class MainWindow : Window
     private AppState _state = new();
     private Process? _activeEncodingProcess;
     private readonly EncodingPauseController _encodingPause = new();
+    private readonly ObservableCollection<BatchFileOption> _batchFiles = [];
     private Stopwatch? _batchStopwatch;
     private bool _closeAfterCurrent;
     private bool _forceClose;
@@ -40,6 +42,8 @@ public partial class MainWindow : Window
             PopulateSettingsControls(_settings);
             ApplySettingsToBatch(_settings);
             if (_commandLineFolder is not null) InputFolder.Text = _commandLineFolder;
+            BatchFileList.ItemsSource = _batchFiles;
+            RefreshBatchFiles();
             LocateTools();
             RefreshLuts();
         };
@@ -61,8 +65,36 @@ public partial class MainWindow : Window
 
     private void BrowseInput_Click(object sender, RoutedEventArgs e)
     {
-        if (PickFolder("Select the folder containing video files", InputFolder.Text) is { } folder) InputFolder.Text = folder;
+        if (PickFolder("Select the folder containing video files", InputFolder.Text) is not { } folder) return;
+        InputFolder.Text = folder;
+        RefreshBatchFiles();
     }
+
+    private void InputFolder_LostKeyboardFocus(object sender, System.Windows.Input.KeyboardFocusChangedEventArgs e) => RefreshBatchFiles();
+    private void Recursive_Changed(object sender, RoutedEventArgs e)
+    {
+        if (IsLoaded) RefreshBatchFiles();
+    }
+    private void RefreshBatchFiles_Click(object sender, RoutedEventArgs e) => RefreshBatchFiles();
+    private void BatchFileSelection_Click(object sender, RoutedEventArgs e) => UpdateBatchFileSummary();
+    private void SelectAllBatchFiles_Click(object sender, RoutedEventArgs e) => SetBatchFileSelection(true);
+    private void SelectNoBatchFiles_Click(object sender, RoutedEventArgs e) => SetBatchFileSelection(false);
+
+    private void RefreshBatchFiles()
+    {
+        _batchFiles.Clear();
+        foreach (var option in BatchFileSelection.Discover(InputFolder.Text, Recursive.IsChecked == true))
+            _batchFiles.Add(option);
+        UpdateBatchFileSummary();
+    }
+
+    private void SetBatchFileSelection(bool selected)
+    {
+        foreach (var option in _batchFiles) option.IsSelected = selected;
+        UpdateBatchFileSummary();
+    }
+
+    private void UpdateBatchFileSummary() => BatchFileSummary.Text = BatchFileSelection.Summary(_batchFiles);
 
     private void RefreshLuts_Click(object sender, RoutedEventArgs e) => RefreshLuts();
 
@@ -276,6 +308,7 @@ public partial class MainWindow : Window
         RecoveryMode.SelectedIndex = (int)settings.DefaultRecovery;
         Recursive.IsChecked = settings.IncludeSubfolders;
         SkipExisting.IsChecked = settings.SkipExisting;
+        if (IsLoaded) RefreshBatchFiles();
     }
 
     private void BrowseMedia_Click(object sender, RoutedEventArgs e)
@@ -301,8 +334,8 @@ public partial class MainWindow : Window
 
         try
         {
-            var files = MediaFileCatalog.Discover(InputFolder.Text, Recursive.IsChecked == true);
-            if (files.Count == 0) throw new InvalidOperationException("No supported video files were found.");
+            var files = BatchFileSelection.SelectedFiles(_batchFiles);
+            if (files.Count == 0) throw new InvalidOperationException("Select at least one video file for this batch.");
             total = files.Count;
             _batchProgress.StartBatch(total);
             ApplyProgressState();
