@@ -11,7 +11,7 @@ internal sealed record AppSettings
     public OutputResolution DefaultResolution { get; init; } = OutputResolution.FullHd;
     public RecoveryStrategy DefaultRecovery { get; init; } = RecoveryStrategy.Normal;
     public bool IncludeSubfolders { get; init; }
-    public bool SkipExisting { get; init; } = true;
+    public bool OverwriteExistingFiles { get; init; }
     public EncodingPreset EncodingPreset { get; init; } = EncodingPreset.Recommended;
     public EncodingOptions Encoding { get; init; } = EncodingPresetCatalog.Recommended;
 

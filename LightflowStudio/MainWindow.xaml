@@ -50,6 +50,7 @@
         <StackPanel Grid.Row="1" Grid.ColumnSpan="2">
          <TextBlock Style="{StaticResource FieldLabel}" Text="VIDEO FOLDER"/>
          <DockPanel><Button DockPanel.Dock="Right" Content="Browse…" Click="BrowseInput_Click"/><TextBox x:Name="InputFolder" TextChanged="InputFolder_TextChanged"/></DockPanel>
+         <CheckBox x:Name="Recursive" Margin="6,5,6,0" Content="Include subfolders" Checked="Recursive_Changed" Unchecked="Recursive_Changed"/>
         </StackPanel>
         <Expander Grid.Row="2" Grid.ColumnSpan="2" Margin="4,8,4,0" IsExpanded="False">
          <Expander.Header>
@@ -102,6 +103,7 @@
         </Expander>
         <Border Grid.Row="3" Grid.ColumnSpan="2" Margin="0,10,0,0" Padding="0,10,0,0" BorderBrush="#2A2E37" BorderThickness="0,1,0,0">
         <Grid>
+         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
          <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
          <StackPanel Margin="0,0,8,0">
           <TextBlock Style="{StaticResource FieldLabel}" Text="OUTPUT LOCATION"/>
@@ -119,6 +121,7 @@
           <TextBlock Style="{StaticResource FieldLabel}" Text="SPECIFIC OUTPUT FOLDER"/>
           <DockPanel><Button DockPanel.Dock="Right" Content="Browse…" Click="BrowseOutputFolder_Click"/><TextBox x:Name="OutputSpecificFolder" LostKeyboardFocus="OutputDestination_LostKeyboardFocus"/></DockPanel>
          </StackPanel>
+         <CheckBox Grid.Row="1" Grid.ColumnSpan="2" x:Name="OverwriteExisting" Margin="6,5,6,0" Content="Overwrite existing files"/>
         </Grid>
         </Border>
         <StackPanel Grid.Row="4" Grid.Column="0" Margin="0,10,8,0">
@@ -130,7 +133,6 @@
           <StackPanel Margin="0,0,6,0"><TextBlock Style="{StaticResource FieldLabel}" Text="RESOLUTION"/><ComboBox x:Name="Resolution" SelectedIndex="0" SelectionChanged="Resolution_SelectionChanged"><ComboBoxItem Content="1080p"/><ComboBoxItem Content="4K UHD"/><ComboBoxItem Content="Source resolution"/></ComboBox></StackPanel>
           <StackPanel Grid.Column="1" Margin="6,0,0,0"><TextBlock Style="{StaticResource FieldLabel}" Text="RECOVERY MODE"/><ComboBox x:Name="RecoveryMode" SelectedIndex="0"><ComboBoxItem Content="Normal"/><ComboBoxItem Content="Salvage audio + video"/><ComboBoxItem Content="Video only"/></ComboBox></StackPanel>
          </Grid>
-         <WrapPanel Margin="4,6,0,0"><CheckBox x:Name="Recursive" Content="Include subfolders" Checked="Recursive_Changed" Unchecked="Recursive_Changed"/><CheckBox x:Name="SkipExisting" IsChecked="True" Content="Skip completed files"/></WrapPanel>
         </StackPanel>
        </Grid>
       </Border>
@@ -141,12 +143,12 @@
         <Border x:Name="BatchStateBorder" Background="#17241F" BorderBrush="#285845" BorderThickness="1" CornerRadius="12" Padding="10,4" Margin="2,0,8,0">
          <TextBlock x:Name="BatchStateText" Foreground="{StaticResource SuccessBrush}" FontSize="11" Text="READY"/>
         </Border>
-        <TextBlock x:Name="CurrentFileText" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Text="Choose a folder to begin" TextTrimming="CharacterEllipsis"/>
+        <TextBlock x:Name="CurrentFileText" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Text="Choose a video folder to begin" TextTrimming="CharacterEllipsis"/>
        </StackPanel>
        <StackPanel Grid.Column="1" Orientation="Horizontal">
         <Button x:Name="CancelButton" Style="{StaticResource DangerButton}" Content="Cancel" IsEnabled="False" Click="Cancel_Click"/>
         <Button x:Name="PauseButton" Content="Pause" IsEnabled="False" Click="Pause_Click"/>
-        <Button x:Name="StartButton" Style="{StaticResource PrimaryButton}" Content="Start Encoding" Click="Start_Click"/>
+        <Button x:Name="StartButton" Style="{StaticResource PrimaryButton}" Content="Start Encoding" IsEnabled="False" Click="Start_Click"/>
        </StackPanel>
       </Grid>
 
@@ -220,7 +222,7 @@
       <TextBlock Grid.ColumnSpan="2" Style="{StaticResource SectionTitle}" Margin="4,0,4,12" Text="Batch Encode Defaults"/>
       <StackPanel Grid.Row="1" Margin="0,0,8,0"><TextBlock Style="{StaticResource FieldLabel}" Text="RESOLUTION"/><ComboBox x:Name="SettingsResolution"><ComboBoxItem Content="1080p"/><ComboBoxItem Content="4K UHD"/><ComboBoxItem Content="Source resolution"/></ComboBox></StackPanel>
       <StackPanel Grid.Row="1" Grid.Column="1" Margin="8,0,0,0"><TextBlock Style="{StaticResource FieldLabel}" Text="RECOVERY MODE"/><ComboBox x:Name="SettingsRecoveryMode"><ComboBoxItem Content="Normal"/><ComboBoxItem Content="Salvage audio + video"/><ComboBoxItem Content="Video only"/></ComboBox></StackPanel>
-      <WrapPanel Grid.Row="2" Grid.ColumnSpan="2" Margin="4,8,0,0"><CheckBox x:Name="SettingsRecursive" Content="Include subfolders by default"/><CheckBox x:Name="SettingsSkipExisting" Content="Skip completed output files by default"/></WrapPanel>
+      <WrapPanel Grid.Row="2" Grid.ColumnSpan="2" Margin="4,8,0,0"><CheckBox x:Name="SettingsRecursive" Content="Include subfolders by default"/><CheckBox x:Name="SettingsOverwriteExisting" Content="Overwrite existing output files by default"/></WrapPanel>
 
      </Grid></Border>
      <Border Grid.Row="3" Style="{StaticResource Card}">

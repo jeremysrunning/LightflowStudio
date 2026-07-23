@@ -24,7 +24,7 @@ public sealed class AppStateStoreTests : IDisposable
             LastResolution = OutputResolution.UltraHd,
             LastRecovery = RecoveryStrategy.Salvage,
             LastIncludeSubfolders = true,
-            LastSkipExisting = false,
+            LastOverwriteExistingFiles = true,
             LastOutputMode = OutputDestinationMode.SpecificFolder,
             LastOutputSubfolder = "Deliverables",
             LastOutputSubfolderUsesResolutionDefault = false,

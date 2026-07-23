@@ -156,6 +156,9 @@ public partial class MainWindow : Window
     {
         if (!IsLoaded) return;
         _batchFolderRefreshTimer.Stop();
+        _batchMetadataCts?.Cancel();
+        _batchFiles.Clear();
+        UpdateBatchFileSummary();
         _batchFolderRefreshTimer.Start();
     }
     private void Recursive_Changed(object sender, RoutedEventArgs e)
@@ -239,7 +242,20 @@ public partial class MainWindow : Window
         UpdateBatchFileSummary();
     }
 
-    private void UpdateBatchFileSummary() => BatchFileSummary.Text = BatchFileSelection.Summary(_batchFiles);
+    private void UpdateBatchFileSummary()
+    {
+        BatchFileSummary.Text = BatchFileSelection.Summary(_batchFiles);
+        UpdateBatchReadiness();
+    }
+
+    private void UpdateBatchReadiness(bool updateGuidance = true)
+    {
+        var folder = InputFolder.Text.Trim();
+        var selected = _batchFiles.Count(file => file.IsSelected);
+        var presentation = BatchStartReadiness.Evaluate(folder.Length > 0, Directory.Exists(folder), _batchFiles.Count, selected);
+        StartButton.IsEnabled = _cts is null && presentation.CanStart;
+        if (updateGuidance) CurrentFileText.Text = presentation.Guidance;
+    }
 
     private void RefreshLuts_Click(object sender, RoutedEventArgs e) => RefreshLuts();
 
@@ -340,7 +356,7 @@ public partial class MainWindow : Window
             DefaultResolution = (OutputResolution)SettingsResolution.SelectedIndex,
             DefaultRecovery = (RecoveryStrategy)SettingsRecoveryMode.SelectedIndex,
             IncludeSubfolders = SettingsRecursive.IsChecked == true,
-            SkipExisting = SettingsSkipExisting.IsChecked == true,
+            OverwriteExistingFiles = SettingsOverwriteExisting.IsChecked == true,
             EncodingPreset = selectedPreset,
             Encoding = encoding
         });
@@ -418,7 +434,7 @@ public partial class MainWindow : Window
         SettingsResolution.SelectedIndex = (int)settings.DefaultResolution;
         SettingsRecoveryMode.SelectedIndex = (int)settings.DefaultRecovery;
         SettingsRecursive.IsChecked = settings.IncludeSubfolders;
-        SettingsSkipExisting.IsChecked = settings.SkipExisting;
+        SettingsOverwriteExisting.IsChecked = settings.OverwriteExistingFiles;
         SettingsEncodingPreset.SelectedIndex = (int)settings.EncodingPreset;
         PopulateEncodingControls(settings.Encoding);
     }
@@ -454,7 +470,7 @@ public partial class MainWindow : Window
         Resolution.SelectedIndex = (int)settings.DefaultResolution;
         RecoveryMode.SelectedIndex = (int)settings.DefaultRecovery;
         Recursive.IsChecked = settings.IncludeSubfolders;
-        SkipExisting.IsChecked = settings.SkipExisting;
+        OverwriteExisting.IsChecked = settings.OverwriteExistingFiles;
         OutputMode.SelectedIndex = (int)OutputDestinationMode.Subfolder;
         OutputSpecificFolder.Text = "";
         SetResolutionSubfolderName();
@@ -470,7 +486,7 @@ public partial class MainWindow : Window
         Resolution.SelectedIndex = (int)state.LastResolution;
         RecoveryMode.SelectedIndex = (int)state.LastRecovery;
         Recursive.IsChecked = state.LastIncludeSubfolders;
-        SkipExisting.IsChecked = state.LastSkipExisting;
+        OverwriteExisting.IsChecked = state.LastOverwriteExistingFiles;
         OutputMode.SelectedIndex = (int)state.LastOutputMode;
         OutputSpecificFolder.Text = state.LastSpecificOutputFolder;
         _subfolderUsesResolutionDefault = state.LastOutputSubfolderUsesResolutionDefault;
@@ -491,7 +507,7 @@ public partial class MainWindow : Window
             LastResolution = (OutputResolution)Math.Clamp(Resolution.SelectedIndex, 0, 2),
             LastRecovery = (RecoveryStrategy)Math.Clamp(RecoveryMode.SelectedIndex, 0, 2),
             LastIncludeSubfolders = Recursive.IsChecked == true,
-            LastSkipExisting = SkipExisting.IsChecked == true,
+            LastOverwriteExistingFiles = OverwriteExisting.IsChecked == true,
             LastOutputMode = (OutputDestinationMode)Math.Clamp(OutputMode.SelectedIndex, 0, 2),
             LastOutputSubfolder = OutputSubfolderName.Text,
             LastOutputSubfolderUsesResolutionDefault = _subfolderUsesResolutionDefault,
@@ -561,7 +577,7 @@ public partial class MainWindow : Window
             AppendDetailedLog($"LUT: {SelectedLutPath}");
             AppendDetailedLog($"Input folder: {InputFolder.Text}");
             AppendDetailedLog($"Encoder: {_settings.Encoding.Codec} via NVIDIA NVENC; preset P{_settings.Encoding.EncoderPreset}; {_settings.Encoding.RateControl}; {_settings.Encoding.Container}");
-            AppendDetailedLog($"Scanning subfolders: {(Recursive.IsChecked == true ? "Yes" : "No")}; skip completed files: {(SkipExisting.IsChecked == true ? "Yes" : "No")}");
+            AppendDetailedLog($"Scanning subfolders: {(Recursive.IsChecked == true ? "Yes" : "No")}; overwrite existing files: {(OverwriteExisting.IsChecked == true ? "Yes" : "No")}");
 
             var completed = 0;
             foreach (var input in files)
@@ -579,11 +595,12 @@ public partial class MainWindow : Window
                 AppendDetailedLog($"Output: {output}");
                 AppendDetailedLog($"Detected duration: {FormatDuration(durations[input])}");
 
-                if (SkipExisting.IsChecked == true && File.Exists(output) && new FileInfo(output).Length > 0)
+                var outputInfo = new FileInfo(output);
+                if (ExistingOutputPolicy.ShouldPreserve(OverwriteExisting.IsChecked == true, outputInfo.Exists, outputInfo.Exists ? outputInfo.Length : 0))
                 {
                     skipped++;
                     completed++;
-                    AppendLog($"Skipped existing: {output}");
+                    AppendLog($"Preserved existing file: {output}");
                     UpdateBatch(completed, total, batchStart);
                     if (_closeAfterCurrent)
                     {
@@ -643,9 +660,9 @@ public partial class MainWindow : Window
             var shouldClose = _closeAfterCurrent;
             _batchStopwatch = null;
             _closeAfterCurrent = false;
-            ToggleEncoding(false);
             _cts.Dispose();
             _cts = null;
+            ToggleEncoding(false);
             if (shouldClose)
             {
                 _forceClose = true;
@@ -657,6 +674,7 @@ public partial class MainWindow : Window
     {
         if (_ffmpeg is null || !File.Exists(_ffmpeg)) { MessageBox.Show("FFmpeg was not found. Open Settings to configure ffmpeg.exe."); return false; }
         if (!Directory.Exists(InputFolder.Text)) { MessageBox.Show("Select a valid video folder."); return false; }
+        if (_batchFiles.All(file => !file.IsSelected)) { MessageBox.Show("Select at least one video file for this batch."); return false; }
         try
         {
             var outputOptions = CurrentOutputDestination();
@@ -722,7 +740,8 @@ public partial class MainWindow : Window
     }
     private void ToggleEncoding(bool running)
     {
-        StartButton.IsEnabled = !running;
+        if (running) StartButton.IsEnabled = false;
+        else UpdateBatchReadiness(updateGuidance: false);
         CancelButton.IsEnabled = running;
         if (!running)
         {
