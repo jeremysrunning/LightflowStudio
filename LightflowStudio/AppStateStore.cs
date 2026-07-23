@@ -11,7 +11,8 @@ internal sealed record AppState
     public OutputResolution LastResolution { get; init; } = OutputResolution.FullHd;
     public RecoveryStrategy LastRecovery { get; init; } = RecoveryStrategy.Normal;
     public bool LastIncludeSubfolders { get; init; }
-    public bool LastSkipExisting { get; init; } = true;
+    public bool LastPreserveFolderStructure { get; init; } = true;
+    public bool LastOverwriteExistingFiles { get; init; }
     public OutputDestinationMode LastOutputMode { get; init; } = OutputDestinationMode.Subfolder;
     public string LastOutputSubfolder { get; init; } = "";
     public bool LastOutputSubfolderUsesResolutionDefault { get; init; } = true;

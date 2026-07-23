@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     private Process? _activeEncodingProcess;
     private readonly EncodingPauseController _encodingPause = new();
     private readonly ObservableCollection<BatchFileOption> _batchFiles = [];
+    private readonly BatchFileSelectionMemory _batchSelectionMemory = new();
     private readonly DispatcherTimer _batchFolderRefreshTimer = new() { Interval = TimeSpan.FromMilliseconds(300) };
     private CancellationTokenSource? _batchMetadataCts;
     private Stopwatch? _batchStopwatch;
@@ -118,8 +119,16 @@ public partial class MainWindow : Window
         OutputSameFolderPanel.Visibility = mode == OutputDestinationMode.SameFolder ? Visibility.Visible : Visibility.Collapsed;
         OutputSubfolderPanel.Visibility = mode == OutputDestinationMode.Subfolder ? Visibility.Visible : Visibility.Collapsed;
         OutputSpecificPanel.Visibility = mode == OutputDestinationMode.SpecificFolder ? Visibility.Visible : Visibility.Collapsed;
+        UpdatePreserveFolderStructureUi();
     }
 
+    private void UpdatePreserveFolderStructureUi()
+    {
+        var mode = (OutputDestinationMode)Math.Clamp(OutputMode.SelectedIndex, 0, 2);
+        PreserveFolderStructure.Visibility = FolderStructurePolicy.IsAvailable(Recursive.IsChecked == true, mode)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
     private void Resolution_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         if (!IsLoaded) return;
@@ -156,20 +165,38 @@ public partial class MainWindow : Window
     {
         if (!IsLoaded) return;
         _batchFolderRefreshTimer.Stop();
+        _batchMetadataCts?.Cancel();
+        RememberBatchFileSelection();
+        _batchFiles.Clear();
+        UpdateBatchFileSummary();
         _batchFolderRefreshTimer.Start();
     }
     private void Recursive_Changed(object sender, RoutedEventArgs e)
     {
-        if (IsLoaded) RefreshBatchFiles();
+        if (!IsLoaded) return;
+        UpdatePreserveFolderStructureUi();
+        RefreshBatchFiles();
+    }
+    private void SettingsRecursive_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        SettingsPreserveFolderStructure.Visibility = SettingsRecursive.IsChecked == true
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
     private void RefreshBatchFiles_Click(object sender, RoutedEventArgs e) => RefreshBatchFiles();
-    private void BatchFileSelection_Click(object sender, RoutedEventArgs e) => UpdateBatchFileSummary();
+    private void BatchFileSelection_Click(object sender, RoutedEventArgs e)
+    {
+        RememberBatchFileSelection();
+        UpdateBatchFileSummary();
+    }
     private void SelectAllBatchFiles_Click(object sender, RoutedEventArgs e) => SetBatchFileSelection(true);
     private void SelectNoBatchFiles_Click(object sender, RoutedEventArgs e) => SetBatchFileSelection(false);
 
     private void RefreshBatchFiles()
     {
         _batchFolderRefreshTimer.Stop();
+        RememberBatchFileSelection();
         _batchMetadataCts?.Cancel();
         _batchMetadataCts?.Dispose();
         _batchMetadataCts = new CancellationTokenSource();
@@ -193,6 +220,7 @@ public partial class MainWindow : Window
         catch (ArgumentException) { }
         foreach (var option in BatchFileSelection.Discover(InputFolder.Text, Recursive.IsChecked == true, excludedOutput, excludedSuffix))
             _batchFiles.Add(option);
+        _batchSelectionMemory.Apply(InputFolder.Text, _batchFiles);
         UpdateBatchFileSummary();
         _ = LoadBatchMetadataAsync(_batchFiles.ToList(), _batchMetadataCts.Token);
     }
@@ -236,10 +264,29 @@ public partial class MainWindow : Window
     private void SetBatchFileSelection(bool selected)
     {
         foreach (var option in _batchFiles) option.IsSelected = selected;
+        RememberBatchFileSelection();
         UpdateBatchFileSummary();
     }
 
-    private void UpdateBatchFileSummary() => BatchFileSummary.Text = BatchFileSelection.Summary(_batchFiles);
+    private void RememberBatchFileSelection()
+    {
+        if (_batchFiles.Count > 0) _batchSelectionMemory.Remember(InputFolder.Text, _batchFiles);
+    }
+
+    private void UpdateBatchFileSummary()
+    {
+        BatchFileSummary.Text = BatchFileSelection.Summary(_batchFiles);
+        UpdateBatchReadiness();
+    }
+
+    private void UpdateBatchReadiness(bool updateGuidance = true)
+    {
+        var folder = InputFolder.Text.Trim();
+        var selected = _batchFiles.Count(file => file.IsSelected);
+        var presentation = BatchStartReadiness.Evaluate(folder.Length > 0, Directory.Exists(folder), _batchFiles.Count, selected);
+        StartButton.IsEnabled = _cts is null && presentation.CanStart;
+        if (updateGuidance) CurrentFileText.Text = presentation.Guidance;
+    }
 
     private void RefreshLuts_Click(object sender, RoutedEventArgs e) => RefreshLuts();
 
@@ -340,7 +387,8 @@ public partial class MainWindow : Window
             DefaultResolution = (OutputResolution)SettingsResolution.SelectedIndex,
             DefaultRecovery = (RecoveryStrategy)SettingsRecoveryMode.SelectedIndex,
             IncludeSubfolders = SettingsRecursive.IsChecked == true,
-            SkipExisting = SettingsSkipExisting.IsChecked == true,
+            PreserveFolderStructure = SettingsPreserveFolderStructure.IsChecked == true,
+            OverwriteExistingFiles = SettingsOverwriteExisting.IsChecked == true,
             EncodingPreset = selectedPreset,
             Encoding = encoding
         });
@@ -418,7 +466,8 @@ public partial class MainWindow : Window
         SettingsResolution.SelectedIndex = (int)settings.DefaultResolution;
         SettingsRecoveryMode.SelectedIndex = (int)settings.DefaultRecovery;
         SettingsRecursive.IsChecked = settings.IncludeSubfolders;
-        SettingsSkipExisting.IsChecked = settings.SkipExisting;
+        SettingsPreserveFolderStructure.IsChecked = settings.PreserveFolderStructure;
+        SettingsOverwriteExisting.IsChecked = settings.OverwriteExistingFiles;
         SettingsEncodingPreset.SelectedIndex = (int)settings.EncodingPreset;
         PopulateEncodingControls(settings.Encoding);
     }
@@ -454,7 +503,8 @@ public partial class MainWindow : Window
         Resolution.SelectedIndex = (int)settings.DefaultResolution;
         RecoveryMode.SelectedIndex = (int)settings.DefaultRecovery;
         Recursive.IsChecked = settings.IncludeSubfolders;
-        SkipExisting.IsChecked = settings.SkipExisting;
+        PreserveFolderStructure.IsChecked = settings.PreserveFolderStructure;
+        OverwriteExisting.IsChecked = settings.OverwriteExistingFiles;
         OutputMode.SelectedIndex = (int)OutputDestinationMode.Subfolder;
         OutputSpecificFolder.Text = "";
         SetResolutionSubfolderName();
@@ -470,7 +520,8 @@ public partial class MainWindow : Window
         Resolution.SelectedIndex = (int)state.LastResolution;
         RecoveryMode.SelectedIndex = (int)state.LastRecovery;
         Recursive.IsChecked = state.LastIncludeSubfolders;
-        SkipExisting.IsChecked = state.LastSkipExisting;
+        PreserveFolderStructure.IsChecked = state.LastPreserveFolderStructure;
+        OverwriteExisting.IsChecked = state.LastOverwriteExistingFiles;
         OutputMode.SelectedIndex = (int)state.LastOutputMode;
         OutputSpecificFolder.Text = state.LastSpecificOutputFolder;
         _subfolderUsesResolutionDefault = state.LastOutputSubfolderUsesResolutionDefault;
@@ -491,7 +542,8 @@ public partial class MainWindow : Window
             LastResolution = (OutputResolution)Math.Clamp(Resolution.SelectedIndex, 0, 2),
             LastRecovery = (RecoveryStrategy)Math.Clamp(RecoveryMode.SelectedIndex, 0, 2),
             LastIncludeSubfolders = Recursive.IsChecked == true,
-            LastSkipExisting = SkipExisting.IsChecked == true,
+            LastPreserveFolderStructure = PreserveFolderStructure.IsChecked == true,
+            LastOverwriteExistingFiles = OverwriteExisting.IsChecked == true,
             LastOutputMode = (OutputDestinationMode)Math.Clamp(OutputMode.SelectedIndex, 0, 2),
             LastOutputSubfolder = OutputSubfolderName.Text,
             LastOutputSubfolderUsesResolutionDefault = _subfolderUsesResolutionDefault,
@@ -508,6 +560,11 @@ public partial class MainWindow : Window
         _subfolderUsesResolutionDefault ? "" : OutputSubfolderName.Text,
         OutputSpecificFolder.Text,
         _filenameSuffixUsesResolutionDefault ? "" : OutputFilenameSuffix.Text);
+
+    private bool ShouldPreserveFolderStructure() => FolderStructurePolicy.ShouldPreserve(
+        Recursive.IsChecked == true,
+        (OutputDestinationMode)Math.Clamp(OutputMode.SelectedIndex, 0, 2),
+        PreserveFolderStructure.IsChecked == true);
     private void BrowseMedia_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog { Filter = "Video files|*.mp4;*.mov;*.mxf;*.mkv;*.avi|All files|*.*" };
@@ -561,14 +618,14 @@ public partial class MainWindow : Window
             AppendDetailedLog($"LUT: {SelectedLutPath}");
             AppendDetailedLog($"Input folder: {InputFolder.Text}");
             AppendDetailedLog($"Encoder: {_settings.Encoding.Codec} via NVIDIA NVENC; preset P{_settings.Encoding.EncoderPreset}; {_settings.Encoding.RateControl}; {_settings.Encoding.Container}");
-            AppendDetailedLog($"Scanning subfolders: {(Recursive.IsChecked == true ? "Yes" : "No")}; skip completed files: {(SkipExisting.IsChecked == true ? "Yes" : "No")}");
+            AppendDetailedLog($"Scanning subfolders: {(Recursive.IsChecked == true ? "Yes" : "No")}; preserve folder structure: {(ShouldPreserveFolderStructure() ? "Yes" : "No")}; overwrite existing files: {(OverwriteExisting.IsChecked == true ? "Yes" : "No")}");
 
             var completed = 0;
             foreach (var input in files)
             {
                 _cts.Token.ThrowIfCancellationRequested();
                 var suffix = OutputDestinationPlanner.ResolveFilenameSuffix(resolution, CurrentOutputDestination());
-                var job = EncodingPathPlanner.CreateJob(InputFolder.Text, outputRoot, input, resolution, _settings.Encoding.Container, suffix);
+                var job = EncodingPathPlanner.CreateJob(InputFolder.Text, outputRoot, input, resolution, _settings.Encoding.Container, suffix, ShouldPreserveFolderStructure());
                 var outDir = Path.GetDirectoryName(job.OutputPath)!;
                 Directory.CreateDirectory(outDir);
                 var output = job.OutputPath;
@@ -579,11 +636,12 @@ public partial class MainWindow : Window
                 AppendDetailedLog($"Output: {output}");
                 AppendDetailedLog($"Detected duration: {FormatDuration(durations[input])}");
 
-                if (SkipExisting.IsChecked == true && File.Exists(output) && new FileInfo(output).Length > 0)
+                var outputInfo = new FileInfo(output);
+                if (ExistingOutputPolicy.ShouldPreserve(OverwriteExisting.IsChecked == true, outputInfo.Exists, outputInfo.Exists ? outputInfo.Length : 0))
                 {
                     skipped++;
                     completed++;
-                    AppendLog($"Skipped existing: {output}");
+                    AppendLog($"Preserved existing file: {output}");
                     UpdateBatch(completed, total, batchStart);
                     if (_closeAfterCurrent)
                     {
@@ -643,9 +701,9 @@ public partial class MainWindow : Window
             var shouldClose = _closeAfterCurrent;
             _batchStopwatch = null;
             _closeAfterCurrent = false;
-            ToggleEncoding(false);
             _cts.Dispose();
             _cts = null;
+            ToggleEncoding(false);
             if (shouldClose)
             {
                 _forceClose = true;
@@ -657,12 +715,18 @@ public partial class MainWindow : Window
     {
         if (_ffmpeg is null || !File.Exists(_ffmpeg)) { MessageBox.Show("FFmpeg was not found. Open Settings to configure ffmpeg.exe."); return false; }
         if (!Directory.Exists(InputFolder.Text)) { MessageBox.Show("Select a valid video folder."); return false; }
+        if (_batchFiles.All(file => !file.IsSelected)) { MessageBox.Show("Select at least one video file for this batch."); return false; }
         try
         {
             var outputOptions = CurrentOutputDestination();
             var outputResolution = (OutputResolution)Math.Clamp(Resolution.SelectedIndex, 0, 2);
-            _ = OutputDestinationPlanner.ResolveRoot(InputFolder.Text, outputResolution, outputOptions);
-            _ = OutputDestinationPlanner.ResolveFilenameSuffix(outputResolution, outputOptions);
+            var outputRoot = OutputDestinationPlanner.ResolveRoot(InputFolder.Text, outputResolution, outputOptions);
+            var suffix = OutputDestinationPlanner.ResolveFilenameSuffix(outputResolution, outputOptions);
+            var jobs = BatchFileSelection.SelectedFiles(_batchFiles)
+                .Select(file => EncodingPathPlanner.CreateJob(InputFolder.Text, outputRoot, file, outputResolution,
+                    _settings.Encoding.Container, suffix, ShouldPreserveFolderStructure()));
+            if (EncodingPathPlanner.HasOutputCollisions(jobs))
+                throw new ArgumentException("Multiple selected files would create the same output filename. Choose Same folder or Specific folder with Preserve source folder structure, or rename the source files.");
         }
         catch (ArgumentException ex) { MessageBox.Show(ex.Message, "Output location", MessageBoxButton.OK, MessageBoxImage.Warning); return false; }
         if (SelectedLutPath is not { } lut || !File.Exists(lut) || !lut.EndsWith(".cube", StringComparison.OrdinalIgnoreCase)) { MessageBox.Show("Select a valid .cube LUT from the LUT dropdown."); return false; }
@@ -722,7 +786,8 @@ public partial class MainWindow : Window
     }
     private void ToggleEncoding(bool running)
     {
-        StartButton.IsEnabled = !running;
+        if (running) StartButton.IsEnabled = false;
+        else UpdateBatchReadiness(updateGuidance: false);
         CancelButton.IsEnabled = running;
         if (!running)
         {

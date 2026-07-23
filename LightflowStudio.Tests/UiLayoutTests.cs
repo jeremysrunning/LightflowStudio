@@ -36,6 +36,34 @@ public class UiLayoutTests
             $"Batch Setup assigns a child to row {assignedRows.Max()}, but only {rowCount} rows are defined.");
     }
 
+    [Fact]
+    public void BatchOptions_ArePlacedBesideTheInputsTheyAffect()
+    {
+        var document = XDocument.Load(Path.Combine(FindRepositoryRoot(), "LightflowStudio", "MainWindow.xaml"));
+        var ns = document.Root!.Name.Namespace;
+        var recursive = Named(document, "Recursive");
+        var inputFolder = Named(document, "InputFolder");
+        var overwrite = Named(document, "OverwriteExisting");
+        var outputMode = Named(document, "OutputMode");
+
+        Assert.Equal(inputFolder.Parent!.Parent, recursive.Parent);
+        Assert.Equal(outputMode.Parent!.Parent, overwrite.Parent!.Parent);
+        Assert.Equal(overwrite.Parent, Named(document, "PreserveFolderStructure").Parent);
+        Assert.DoesNotContain(document.Descendants(ns + "CheckBox"),
+            element => (string?)element.Attribute("Content") == "Skip completed files");
+    }
+
+    [Fact]
+    public void StartEncoding_IsDisabledUntilBatchRequirementsAreMet()
+    {
+        var document = XDocument.Load(Path.Combine(FindRepositoryRoot(), "LightflowStudio", "MainWindow.xaml"));
+
+        Assert.Equal("False", (string?)Named(document, "StartButton").Attribute("IsEnabled"));
+    }
+
+    private static XElement Named(XDocument document, string name) =>
+        document.Descendants().Single(element => element.Attributes().Any(attribute =>
+            attribute.Name.LocalName == "Name" && attribute.Value == name));
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

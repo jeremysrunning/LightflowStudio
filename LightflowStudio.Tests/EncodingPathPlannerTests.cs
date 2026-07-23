@@ -68,6 +68,28 @@ public sealed class EncodingPathPlannerTests
         Assert.EndsWith("clip.mp4", noSuffix.OutputPath);
     }
     [Fact]
+    public void CreateJob_FlattensNestedInputWhenFolderStructureIsNotPreserved()
+    {
+        var inputRoot = Path.Combine("C:", "videos");
+        var outputRoot = Path.Combine("D:", "exports");
+        var input = Path.Combine(inputRoot, "day-one", "clip.mov");
+
+        var job = EncodingPathPlanner.CreateJob(inputRoot, outputRoot, input,
+            OutputResolution.FullHd, preserveFolderStructure: false);
+
+        Assert.Equal(Path.Combine(outputRoot, "clip_1080p.mp4"), job.OutputPath);
+    }
+
+    [Fact]
+    public void HasOutputCollisions_DetectsDuplicateFlattenedNames()
+    {
+        var first = new EncodingJob("one", Path.Combine("output", "clip.mp4"));
+        var second = new EncodingJob("two", Path.Combine("output", "CLIP.mp4"));
+
+        Assert.True(EncodingPathPlanner.HasOutputCollisions([first, second]));
+        Assert.False(EncodingPathPlanner.HasOutputCollisions([first]));
+    }
+    [Fact]
     public void ResolutionName_RejectsUnknownValue()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => EncodingPathPlanner.ResolutionName((OutputResolution)99));
