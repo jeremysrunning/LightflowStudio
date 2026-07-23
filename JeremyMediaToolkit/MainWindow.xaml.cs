@@ -2,9 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Text;
-using System.Text.Json;
 using System.Windows;
-using System.Windows.Controls;
 using Forms = System.Windows.Forms;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using MessageBox = System.Windows.MessageBox;
@@ -17,76 +15,144 @@ public partial class MainWindow : Window
     private string? _ffprobe;
     private CancellationTokenSource? _cts;
     private readonly BatchProgressState _batchProgress = new();
+    private readonly string? _commandLineFolder;
+    private AppSettings _settings = new();
 
     public MainWindow()
     {
         InitializeComponent();
+        _commandLineFolder = Environment.GetCommandLineArgs().Skip(1).FirstOrDefault(Directory.Exists);
         Loaded += (_, _) =>
         {
+            _settings = AppSettingsStore.Load(AppSettingsStore.SettingsPath);
+            PopulateSettingsControls(_settings);
+            ApplySettingsToBatch(_settings);
+            if (_commandLineFolder is not null) InputFolder.Text = _commandLineFolder;
             LocateTools();
-            LutFolder.Text = AppSettingsStore.Load(AppSettingsStore.SettingsPath).LutFolder;
             RefreshLuts();
         };
-        if (Environment.GetCommandLineArgs().Skip(1).FirstOrDefault(Directory.Exists) is string folder)
-            InputFolder.Text = folder;
     }
-
     private void LocateTools()
     {
         var baseDir = AppContext.BaseDirectory;
-        _ffmpeg = ExecutableLocator.Find("ffmpeg.exe", Path.Combine(baseDir, "ffmpeg", "bin", "ffmpeg.exe"));
-        _ffprobe = ExecutableLocator.Find("ffprobe.exe", Path.Combine(baseDir, "ffmpeg", "bin", "ffprobe.exe"));
-        StatusText.Text = _ffmpeg is null ? "FFmpeg not found — use FFmpeg Settings" : $"FFmpeg ready: {_ffmpeg}";
+        _ffmpeg = ExecutableLocator.Find("ffmpeg.exe", Path.Combine(baseDir, "ffmpeg", "bin", "ffmpeg.exe"), configured: _settings.FfmpegPath);
+        var besideFfmpeg = _ffmpeg is null ? "" : Path.Combine(Path.GetDirectoryName(_ffmpeg)!, "ffprobe.exe");
+        _ffprobe = ExecutableLocator.Find("ffprobe.exe", Path.Combine(baseDir, "ffmpeg", "bin", "ffprobe.exe"), configured: besideFfmpeg);
+        StatusText.Text = _ffmpeg is null ? "FFmpeg not found — configure it in Settings" : $"FFmpeg ready: {_ffmpeg}";
     }
-
-
-    private void Settings_Click(object sender, RoutedEventArgs e)
-    {
-        var dlg = new OpenFileDialog { Filter = "FFmpeg executable|ffmpeg.exe", Title = "Select ffmpeg.exe" };
-        if (dlg.ShowDialog() == true)
-        {
-            _ffmpeg = dlg.FileName;
-            var probe = Path.Combine(Path.GetDirectoryName(dlg.FileName)!, "ffprobe.exe");
-            _ffprobe = File.Exists(probe) ? probe : _ffprobe;
-            StatusText.Text = $"FFmpeg ready: {_ffmpeg}";
-        }
-    }
-
-    private static string? PickFolder(string description)
+    private static string? PickFolder(string description, string? initialFolder = null)
     {
         using var dlg = new Forms.FolderBrowserDialog { Description = description, UseDescriptionForTitle = true };
+        if (!string.IsNullOrWhiteSpace(initialFolder) && Directory.Exists(initialFolder)) dlg.SelectedPath = initialFolder;
         return dlg.ShowDialog() == Forms.DialogResult.OK ? dlg.SelectedPath : null;
     }
 
-    private void BrowseInput_Click(object sender, RoutedEventArgs e) { if (PickFolder("Select the folder containing video files") is { } p) InputFolder.Text = p; }
-    private void BrowseLutFolder_Click(object sender, RoutedEventArgs e)
+    private void BrowseInput_Click(object sender, RoutedEventArgs e)
     {
-        if (PickFolder("Select the folder containing .cube LUT files") is not { } folder) return;
-        LutFolder.Text = folder;
-        AppSettingsStore.Save(AppSettingsStore.SettingsPath, new AppSettings(folder));
-        RefreshLuts();
+        if (PickFolder("Select the folder containing video files", InputFolder.Text) is { } folder) InputFolder.Text = folder;
     }
 
     private void RefreshLuts_Click(object sender, RoutedEventArgs e) => RefreshLuts();
 
-    private void RefreshLuts()
+    private int RefreshLuts()
     {
         var selectedPath = LutSelection.SelectedValue as string;
-        var options = LutCatalog.Discover(LutFolder.Text);
+        var options = LutCatalog.Discover(_settings.LutFolder);
         LutSelection.ItemsSource = options;
         LutSelection.SelectedItem = options.FirstOrDefault(option =>
             string.Equals(option.FilePath, selectedPath, StringComparison.OrdinalIgnoreCase)) ?? options.FirstOrDefault();
-        StatusText.Text = options.Count == 0
-            ? $"No .cube LUT files found in {LutFolder.Text}"
-            : $"Loaded {options.Count} LUT{(options.Count == 1 ? "" : "s")}";
+        SettingsMessage.Text = options.Count == 0
+            ? $"No .cube LUT files found in {_settings.LutFolder}"
+            : $"Loaded {options.Count} LUT{(options.Count == 1 ? "" : "s")}.";
+        return options.Count;
+    }
+
+    private void BrowseDefaultVideoFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (PickFolder("Select the default video folder", SettingsDefaultVideoFolder.Text) is { } folder)
+            SettingsDefaultVideoFolder.Text = folder;
+    }
+
+    private void BrowseSettingsLutFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (PickFolder("Select the folder containing .cube LUT files", SettingsLutFolder.Text) is { } folder)
+            SettingsLutFolder.Text = folder;
+    }
+
+    private void BrowseSettingsFfmpeg_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog { Filter = "FFmpeg executable|ffmpeg.exe", Title = "Select ffmpeg.exe" };
+        if (File.Exists(SettingsFfmpegPath.Text)) dialog.InitialDirectory = Path.GetDirectoryName(SettingsFfmpegPath.Text);
+        if (dialog.ShowDialog() == true) SettingsFfmpegPath.Text = dialog.FileName;
+    }
+
+    private void SaveSettings_Click(object sender, RoutedEventArgs e)
+    {
+        var settings = ReadSettingsControls();
+        if (!string.IsNullOrWhiteSpace(settings.FfmpegPath) && !File.Exists(settings.FfmpegPath))
+        {
+            MessageBox.Show("The configured FFmpeg executable does not exist.", "Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            AppSettingsStore.Save(AppSettingsStore.SettingsPath, settings);
+            _settings = settings;
+            ApplySettingsToBatch(settings);
+            LocateTools();
+            var lutCount = RefreshLuts();
+            SettingsMessage.Text = $"Settings saved. {lutCount} LUT{(lutCount == 1 ? "" : "s")} available.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(ex.Message, "Could not save settings", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void ResetSettings_Click(object sender, RoutedEventArgs e)
+    {
+        PopulateSettingsControls(new AppSettings());
+        SettingsMessage.Text = "Default values loaded. Select Save Settings to apply them.";
+    }
+
+    private AppSettings ReadSettingsControls() => AppSettings.Normalize(new AppSettings
+    {
+        DefaultVideoFolder = SettingsDefaultVideoFolder.Text,
+        LutFolder = SettingsLutFolder.Text,
+        FfmpegPath = SettingsFfmpegPath.Text,
+        DefaultResolution = (OutputResolution)SettingsResolution.SelectedIndex,
+        DefaultRecovery = (RecoveryStrategy)SettingsRecoveryMode.SelectedIndex,
+        IncludeSubfolders = SettingsRecursive.IsChecked == true,
+        SkipExisting = SettingsSkipExisting.IsChecked == true
+    });
+
+    private void PopulateSettingsControls(AppSettings settings)
+    {
+        SettingsDefaultVideoFolder.Text = settings.DefaultVideoFolder;
+        SettingsLutFolder.Text = settings.LutFolder;
+        SettingsFfmpegPath.Text = settings.FfmpegPath;
+        SettingsResolution.SelectedIndex = (int)settings.DefaultResolution;
+        SettingsRecoveryMode.SelectedIndex = (int)settings.DefaultRecovery;
+        SettingsRecursive.IsChecked = settings.IncludeSubfolders;
+        SettingsSkipExisting.IsChecked = settings.SkipExisting;
+    }
+
+    private void ApplySettingsToBatch(AppSettings settings)
+    {
+        InputFolder.Text = settings.DefaultVideoFolder;
+        Resolution.SelectedIndex = (int)settings.DefaultResolution;
+        RecoveryMode.SelectedIndex = (int)settings.DefaultRecovery;
+        Recursive.IsChecked = settings.IncludeSubfolders;
+        SkipExisting.IsChecked = settings.SkipExisting;
     }
 
     private void BrowseMedia_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new OpenFileDialog { Filter = "Video files|*.mp4;*.mov;*.mxf;*.mkv;*.avi|All files|*.*" };
-        if (dlg.ShowDialog() == true) MediaPath.Text = dlg.FileName;
+        var dialog = new OpenFileDialog { Filter = "Video files|*.mp4;*.mov;*.mxf;*.mkv;*.avi|All files|*.*" };
+        if (Directory.Exists(_settings.DefaultVideoFolder)) dialog.InitialDirectory = _settings.DefaultVideoFolder;
+        if (dialog.ShowDialog() == true) MediaPath.Text = dialog.FileName;
     }
-
     private async void Start_Click(object sender, RoutedEventArgs e)
     {
         if (!ValidateEncoderInputs()) return;
@@ -140,7 +206,7 @@ public partial class MainWindow : Window
 
     private bool ValidateEncoderInputs()
     {
-        if (_ffmpeg is null || !File.Exists(_ffmpeg)) { MessageBox.Show("FFmpeg was not found. Use FFmpeg Settings to select ffmpeg.exe."); return false; }
+        if (_ffmpeg is null || !File.Exists(_ffmpeg)) { MessageBox.Show("FFmpeg was not found. Open Settings to configure ffmpeg.exe."); return false; }
         if (!Directory.Exists(InputFolder.Text)) { MessageBox.Show("Select a valid video folder."); return false; }
         if (SelectedLutPath is not { } lut || !File.Exists(lut) || !lut.EndsWith(".cube", StringComparison.OrdinalIgnoreCase)) { MessageBox.Show("Select a valid .cube LUT from the LUT dropdown."); return false; }
         return true;
