@@ -84,6 +84,10 @@ public partial class MainWindow : Window
                 .Where(p => !p.Contains($"{Path.DirectorySeparatorChar}Toolkit-", StringComparison.OrdinalIgnoreCase)).Order().ToList();
             if (files.Count == 0) throw new InvalidOperationException("No supported video files were found.");
 
+            BatchProgress.Value = 0;
+            FileProgress.Value = 0;
+            EtaText.Text = $"Completed 0 of {files.Count} — estimated remaining: calculating…";
+
             var mode = RecoveryMode.SelectedIndex;
             var suffix = mode == 1 ? "-Salvage" : mode == 2 ? "-VideoOnly" : "";
             var resName = Resolution.SelectedIndex == 0 ? "1080p" : Resolution.SelectedIndex == 1 ? "4K" : "Source";
@@ -99,6 +103,7 @@ public partial class MainWindow : Window
                 var outDir = Path.Combine(outputRoot, relativeDir);
                 Directory.CreateDirectory(outDir);
                 var output = Path.Combine(outDir, Path.GetFileNameWithoutExtension(input) + $"_{resName}.mp4");
+                FileProgress.Value = 0;
                 CurrentFileText.Text = $"{completed + 1}/{files.Count}: {Path.GetFileName(input)}";
                 if (SkipExisting.IsChecked == true && File.Exists(output) && new FileInfo(output).Length > 0)
                 {
