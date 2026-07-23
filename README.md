@@ -1,6 +1,8 @@
-# Jeremy Media Toolkit — Native Windows v0.2
+# Lightflow Studio — Native Windows v0.2
 
-A native C#/.NET 8 WPF desktop utility for Jeremy Running Photography video workflows.
+**Video processing and workflow tools by Jeremy Running Photography.**
+
+Lightflow Studio is a native C#/.NET 8 WPF desktop application for preparing, processing, inspecting, and recovering video media.
 
 ## Features
 
@@ -50,7 +52,7 @@ powershell.exe -ExecutionPolicy Bypass -File .\build.ps1
 Run the unit test suite with:
 
 ```powershell
-dotnet test .\JeremyMediaToolkit.Tests\JeremyMediaToolkit.Tests.csproj
+dotnet test .\LightflowStudio.Tests\LightflowStudio.Tests.csproj
 ```
 
 For a self-contained, single-file Windows build:
@@ -59,7 +61,7 @@ For a self-contained, single-file Windows build:
 powershell.exe -ExecutionPolicy Bypass -File .\publish-self-contained.ps1
 ```
 
-The output is placed in `publish\JeremyMediaToolkit-win-x64` and does not require a separate .NET runtime.
+The output is placed in `publish\LightflowStudio-win-x64` and does not require a separate .NET runtime.
 
 ## FFmpeg setup
 
@@ -79,7 +81,7 @@ ffmpeg -hide_banner -encoders | Select-String h264_nvenc
 Alternatively, place `ffmpeg.exe` and `ffprobe.exe` under:
 
 ```text
-JeremyMediaToolkit.exe
+LightflowStudio.exe
 ffmpeg\
   bin\
     ffmpeg.exe
@@ -100,9 +102,9 @@ See `PremiereHelper\README.txt`. Adobe has changed Premiere scripting support ov
 
 ## Notes
 
-- Originals are never overwritten. Encoded files go into a new `Toolkit-*` subfolder.
+- Originals are never overwritten. Encoded files go into a new `Lightflow-*` subfolder.
 - The LUT dropdown defaults to `J:\Photography\LUTs`. Choose another LUT folder in Settings, or use **Refresh** after adding LUT files to the current folder.
-- Application preferences are saved under `%LOCALAPPDATA%\JeremyMediaToolkit\settings.json` and restored at startup.
+- Application preferences are saved under `%LOCALAPPDATA%\Jeremy Running Photography\Lightflow Studio\settings.json` and restored at startup.
 - 4K output is 3840×2160 with aspect-preserving scale and letterbox/pillarbox padding when required.
 - Contact sheets sample one frame every ten seconds and use the first 16 samples.
 - v0.2 is source-complete; FFmpeg binaries are intentionally not redistributed.

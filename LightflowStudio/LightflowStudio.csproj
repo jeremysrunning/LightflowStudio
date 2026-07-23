@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>LightflowStudio</AssemblyName>
+    <AssemblyTitle>Lightflow Studio</AssemblyTitle>
+    <RootNamespace>LightflowStudio</RootNamespace>
+    <Version>0.2.0</Version>
+    <Product>Lightflow Studio</Product>
+    <Company>Jeremy Running Photography</Company>
+    <Description>Video processing and workflow tools</Description>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\Branding\LightflowStudio.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Remove="Assets\Branding\LightflowStudio.ico" />
+    <None Remove="Assets\Branding\jr-glow-source.png" />
+    <Resource Include="Assets\Branding\LightflowStudio.ico" />
+    <Resource Include="Assets\Branding\jr-glow-source.png" />
+  </ItemGroup>
+</Project>
