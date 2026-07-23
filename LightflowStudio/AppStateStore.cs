@@ -3,7 +3,23 @@ using System.Text.Json;
 
 namespace LightflowStudio;
 
-internal sealed record AppState(string LastLutPath = "");
+internal sealed record AppState
+{
+    public string LastLutPath { get; init; } = "";
+    public bool HasBatchState { get; init; }
+    public string LastVideoFolder { get; init; } = "";
+    public OutputResolution LastResolution { get; init; } = OutputResolution.FullHd;
+    public RecoveryStrategy LastRecovery { get; init; } = RecoveryStrategy.Normal;
+    public bool LastIncludeSubfolders { get; init; }
+    public bool LastSkipExisting { get; init; } = true;
+    public OutputDestinationMode LastOutputMode { get; init; } = OutputDestinationMode.Subfolder;
+    public string LastOutputSubfolder { get; init; } = "";
+    public bool LastOutputSubfolderUsesResolutionDefault { get; init; } = true;
+    public string LastSpecificOutputFolder { get; init; } = "";
+
+    public AppState() { }
+    public AppState(string lastLutPath) => LastLutPath = lastLutPath;
+}
 
 internal static class AppStateStore
 {

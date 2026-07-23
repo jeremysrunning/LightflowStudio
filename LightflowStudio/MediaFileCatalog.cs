@@ -9,13 +9,15 @@ internal static class MediaFileCatalog
         ".mp4", ".mov", ".mkv", ".mxf"
     };
 
-    public static IReadOnlyList<string> Discover(string folder, bool recursive)
+    public static IReadOnlyList<string> Discover(string folder, bool recursive, string? excludedFolder = null)
     {
         if (!Directory.Exists(folder)) return [];
         var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
         return Directory.EnumerateFiles(folder, "*", option)
             .Where(path => SupportedExtensions.Contains(Path.GetExtension(path)))
+            .Where(path => string.IsNullOrWhiteSpace(excludedFolder) || !IsWithin(excludedFolder, path))
             .Where(path => !IsGeneratedOutput(folder, path))
+            .Where(path => !IsResolutionSuffixedOutput(path))
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
@@ -25,4 +27,18 @@ internal static class MediaFileCatalog
         .SkipLast(1)
         .Any(part => part.StartsWith("Lightflow-", StringComparison.OrdinalIgnoreCase)
             || part.StartsWith("Toolkit-", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsWithin(string folder, string path)
+    {
+        var relative = Path.GetRelativePath(Path.GetFullPath(folder), Path.GetFullPath(path));
+        return relative != ".." && !relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) && !Path.IsPathRooted(relative);
+    }
+
+    private static bool IsResolutionSuffixedOutput(string path)
+    {
+        var name = Path.GetFileNameWithoutExtension(path);
+        return name.EndsWith("_1080p", StringComparison.OrdinalIgnoreCase)
+            || name.EndsWith("_4K", StringComparison.OrdinalIgnoreCase)
+            || name.EndsWith("_Source", StringComparison.OrdinalIgnoreCase);
+    }
 }

@@ -29,6 +29,8 @@ public partial class MainWindow : Window
     private Stopwatch? _batchStopwatch;
     private bool _closeAfterCurrent;
     private bool _forceClose;
+    private bool _subfolderUsesResolutionDefault = true;
+    private bool _updatingSubfolderName;
     private static readonly double[] FrameRateValues = [0, 23.976, 24, 25, 29.97, 30, 50, 59.94, 60];
     private static readonly int[] AudioSampleRates = [0, 44100, 48000, 96000];
 
@@ -49,6 +51,7 @@ public partial class MainWindow : Window
             _state = AppStateStore.Load(AppStateStore.StatePath);
             PopulateSettingsControls(_settings);
             ApplySettingsToBatch(_settings);
+            ApplyStateToBatch(_state);
             if (_commandLineFolder is not null) InputFolder.Text = _commandLineFolder;
             BatchFileList.ItemsSource = _batchFiles;
             LocateTools();
@@ -78,6 +81,48 @@ public partial class MainWindow : Window
         RefreshBatchFiles();
     }
 
+    private void BrowseOutputFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (PickFolder("Select the output folder", OutputSpecificFolder.Text) is { } folder) OutputSpecificFolder.Text = folder;
+    }
+
+    private void BrowseDefaultOutputFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (PickFolder("Select the default output folder", SettingsSpecificOutputFolder.Text) is { } folder) SettingsSpecificOutputFolder.Text = folder;
+    }
+
+    private void OutputMode_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (IsLoaded) { UpdateOutputModeUi(); RefreshBatchFiles(); }
+    }
+
+    private void OutputDestination_LostKeyboardFocus(object sender, System.Windows.Input.KeyboardFocusChangedEventArgs e) => RefreshBatchFiles();
+
+    private void UpdateOutputModeUi()
+    {
+        var mode = (OutputDestinationMode)Math.Clamp(OutputMode.SelectedIndex, 0, 2);
+        OutputSameFolderNote.Visibility = mode == OutputDestinationMode.SameFolder ? Visibility.Visible : Visibility.Collapsed;
+        OutputSubfolderPanel.Visibility = mode == OutputDestinationMode.Subfolder ? Visibility.Visible : Visibility.Collapsed;
+        OutputSpecificPanel.Visibility = mode == OutputDestinationMode.SpecificFolder ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void Resolution_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (IsLoaded && _subfolderUsesResolutionDefault) { SetResolutionSubfolderName(); RefreshBatchFiles(); }
+    }
+
+    private void OutputSubfolderName_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        if (IsLoaded && !_updatingSubfolderName) _subfolderUsesResolutionDefault = false;
+    }
+
+    private void SetResolutionSubfolderName()
+    {
+        _updatingSubfolderName = true;
+        OutputSubfolderName.Text = EncodingPathPlanner.ResolutionName((OutputResolution)Math.Clamp(Resolution.SelectedIndex, 0, 2));
+        _updatingSubfolderName = false;
+        _subfolderUsesResolutionDefault = true;
+    }
     private void InputFolder_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
     {
         if (!IsLoaded) return;
@@ -100,7 +145,17 @@ public partial class MainWindow : Window
         _batchMetadataCts?.Dispose();
         _batchMetadataCts = new CancellationTokenSource();
         _batchFiles.Clear();
-        foreach (var option in BatchFileSelection.Discover(InputFolder.Text, Recursive.IsChecked == true))
+        string? excludedOutput = null;
+        try
+        {
+            if ((OutputDestinationMode)Math.Clamp(OutputMode.SelectedIndex, 0, 2) != OutputDestinationMode.SameFolder)
+            {
+                var candidate = OutputDestinationPlanner.ResolveRoot(InputFolder.Text, (OutputResolution)Math.Clamp(Resolution.SelectedIndex, 0, 2), CurrentOutputDestination());
+                if (!string.Equals(Path.GetFullPath(candidate).TrimEnd(Path.DirectorySeparatorChar), Path.GetFullPath(InputFolder.Text).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase)) excludedOutput = candidate;
+            }
+        }
+        catch (ArgumentException) { }
+        foreach (var option in BatchFileSelection.Discover(InputFolder.Text, Recursive.IsChecked == true, excludedOutput))
             _batchFiles.Add(option);
         UpdateBatchFileSummary();
         _ = LoadBatchMetadataAsync(_batchFiles.ToList(), _batchMetadataCts.Token);
@@ -169,7 +224,7 @@ public partial class MainWindow : Window
     private void LutSelection_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         if (SelectedLutPath is not { } path || string.Equals(path, _state.LastLutPath, StringComparison.OrdinalIgnoreCase)) return;
-        _state = new AppState(path);
+        _state = _state with { LastLutPath = path };
         try
         {
             AppStateStore.Save(AppStateStore.StatePath, _state);
@@ -249,6 +304,9 @@ public partial class MainWindow : Window
             DefaultRecovery = (RecoveryStrategy)SettingsRecoveryMode.SelectedIndex,
             IncludeSubfolders = SettingsRecursive.IsChecked == true,
             SkipExisting = SettingsSkipExisting.IsChecked == true,
+            DefaultOutputMode = (OutputDestinationMode)Math.Clamp(SettingsOutputMode.SelectedIndex, 0, 2),
+            DefaultOutputSubfolder = SettingsOutputSubfolder.Text,
+            DefaultSpecificOutputFolder = SettingsSpecificOutputFolder.Text,
             EncodingPreset = selectedPreset,
             Encoding = encoding
         });
@@ -327,6 +385,9 @@ public partial class MainWindow : Window
         SettingsRecoveryMode.SelectedIndex = (int)settings.DefaultRecovery;
         SettingsRecursive.IsChecked = settings.IncludeSubfolders;
         SettingsSkipExisting.IsChecked = settings.SkipExisting;
+        SettingsOutputMode.SelectedIndex = (int)settings.DefaultOutputMode;
+        SettingsOutputSubfolder.Text = settings.DefaultOutputSubfolder;
+        SettingsSpecificOutputFolder.Text = settings.DefaultSpecificOutputFolder;
         SettingsEncodingPreset.SelectedIndex = (int)settings.EncodingPreset;
         PopulateEncodingControls(settings.Encoding);
     }
@@ -363,9 +424,57 @@ public partial class MainWindow : Window
         RecoveryMode.SelectedIndex = (int)settings.DefaultRecovery;
         Recursive.IsChecked = settings.IncludeSubfolders;
         SkipExisting.IsChecked = settings.SkipExisting;
+        OutputMode.SelectedIndex = (int)settings.DefaultOutputMode;
+        OutputSpecificFolder.Text = settings.DefaultSpecificOutputFolder;
+        if (string.IsNullOrWhiteSpace(settings.DefaultOutputSubfolder)) SetResolutionSubfolderName();
+        else
+        {
+            _subfolderUsesResolutionDefault = false;
+            OutputSubfolderName.Text = settings.DefaultOutputSubfolder;
+        }
+        UpdateOutputModeUi();
         if (IsLoaded) RefreshBatchFiles();
     }
 
+    private void ApplyStateToBatch(AppState state)
+    {
+        if (!state.HasBatchState) return;
+        InputFolder.Text = state.LastVideoFolder;
+        Resolution.SelectedIndex = (int)state.LastResolution;
+        RecoveryMode.SelectedIndex = (int)state.LastRecovery;
+        Recursive.IsChecked = state.LastIncludeSubfolders;
+        SkipExisting.IsChecked = state.LastSkipExisting;
+        OutputMode.SelectedIndex = (int)state.LastOutputMode;
+        OutputSpecificFolder.Text = state.LastSpecificOutputFolder;
+        _subfolderUsesResolutionDefault = state.LastOutputSubfolderUsesResolutionDefault;
+        if (_subfolderUsesResolutionDefault) SetResolutionSubfolderName();
+        else OutputSubfolderName.Text = state.LastOutputSubfolder;
+        UpdateOutputModeUi();
+    }
+
+    private void SaveBatchState()
+    {
+        _state = _state with
+        {
+            HasBatchState = true,
+            LastVideoFolder = InputFolder.Text,
+            LastResolution = (OutputResolution)Math.Clamp(Resolution.SelectedIndex, 0, 2),
+            LastRecovery = (RecoveryStrategy)Math.Clamp(RecoveryMode.SelectedIndex, 0, 2),
+            LastIncludeSubfolders = Recursive.IsChecked == true,
+            LastSkipExisting = SkipExisting.IsChecked == true,
+            LastOutputMode = (OutputDestinationMode)Math.Clamp(OutputMode.SelectedIndex, 0, 2),
+            LastOutputSubfolder = OutputSubfolderName.Text,
+            LastOutputSubfolderUsesResolutionDefault = _subfolderUsesResolutionDefault,
+            LastSpecificOutputFolder = OutputSpecificFolder.Text
+        };
+        try { AppStateStore.Save(AppStateStore.StatePath, _state); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { AppendDetailedLog($"Could not remember batch choices: {ex.Message}"); }
+    }
+
+    private OutputDestinationOptions CurrentOutputDestination() => new(
+        (OutputDestinationMode)Math.Clamp(OutputMode.SelectedIndex, 0, 2),
+        _subfolderUsesResolutionDefault ? "" : OutputSubfolderName.Text,
+        OutputSpecificFolder.Text);
     private void BrowseMedia_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog { Filter = "Video files|*.mp4;*.mov;*.mxf;*.mkv;*.avi|All files|*.*" };
@@ -375,6 +484,7 @@ public partial class MainWindow : Window
     private async void Start_Click(object sender, RoutedEventArgs e)
     {
         if (!ValidateEncoderInputs()) return;
+        SaveBatchState();
         _closeAfterCurrent = false;
         _cts = new CancellationTokenSource();
         ToggleEncoding(true);
@@ -397,7 +507,7 @@ public partial class MainWindow : Window
 
             var recovery = (RecoveryStrategy)RecoveryMode.SelectedIndex;
             var resolution = (OutputResolution)Resolution.SelectedIndex;
-            outputRoot = EncodingPathPlanner.OutputRoot(InputFolder.Text, resolution, recovery, _settings.Encoding);
+            outputRoot = OutputDestinationPlanner.ResolveRoot(InputFolder.Text, resolution, CurrentOutputDestination());
             Directory.CreateDirectory(outputRoot);
             batchStart = Stopwatch.StartNew();
             _batchStopwatch = batchStart;
@@ -513,6 +623,8 @@ public partial class MainWindow : Window
     {
         if (_ffmpeg is null || !File.Exists(_ffmpeg)) { MessageBox.Show("FFmpeg was not found. Open Settings to configure ffmpeg.exe."); return false; }
         if (!Directory.Exists(InputFolder.Text)) { MessageBox.Show("Select a valid video folder."); return false; }
+        try { _ = OutputDestinationPlanner.ResolveRoot(InputFolder.Text, (OutputResolution)Math.Clamp(Resolution.SelectedIndex, 0, 2), CurrentOutputDestination()); }
+        catch (ArgumentException ex) { MessageBox.Show(ex.Message, "Output location", MessageBoxButton.OK, MessageBoxImage.Warning); return false; }
         if (SelectedLutPath is not { } lut || !File.Exists(lut) || !lut.EndsWith(".cube", StringComparison.OrdinalIgnoreCase)) { MessageBox.Show("Select a valid .cube LUT from the LUT dropdown."); return false; }
         return true;
     }
@@ -618,6 +730,7 @@ public partial class MainWindow : Window
 
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
+        SaveBatchState();
         if (_cts is null || _forceClose) return;
 
         e.Cancel = true;
