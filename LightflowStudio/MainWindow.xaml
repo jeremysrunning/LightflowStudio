@@ -60,7 +60,7 @@
          </Expander.Header>
          <Border Margin="0,8,0,2" Background="#111318" BorderBrush="#303540" BorderThickness="1" CornerRadius="7" Padding="10">
           <Grid>
-           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
            <DockPanel Margin="0,0,0,8">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
              <Button Padding="10,5" Content="All" Click="SelectAllBatchFiles_Click"/>
@@ -69,16 +69,27 @@
             </StackPanel>
             <TextBlock VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Text="Uncheck any videos you want to skip."/>
            </DockPanel>
-           <ListBox Grid.Row="1" x:Name="BatchFileList" MaxHeight="230" BorderThickness="0" Background="Transparent" ScrollViewer.VerticalScrollBarVisibility="Auto">
+           <Grid Grid.Row="1" Margin="6,0,14,5">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="32"/><ColumnDefinition Width="*"/><ColumnDefinition Width="110"/><ColumnDefinition Width="88"/><ColumnDefinition Width="76"/><ColumnDefinition Width="90"/><ColumnDefinition Width="84"/></Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="1" Style="{StaticResource FieldLabel}" Text="FILE"/>
+            <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="RESOLUTION"/>
+            <TextBlock Grid.Column="3" Style="{StaticResource FieldLabel}" Text="FRAME RATE"/>
+            <TextBlock Grid.Column="4" Style="{StaticResource FieldLabel}" Text="DURATION"/>
+            <TextBlock Grid.Column="5" Style="{StaticResource FieldLabel}" Text="SIZE"/>
+            <TextBlock Grid.Column="6" Style="{StaticResource FieldLabel}" Text="STATUS"/>
+           </Grid>
+           <ListBox Grid.Row="2" x:Name="BatchFileList" MaxHeight="230" BorderThickness="0" Background="Transparent" HorizontalContentAlignment="Stretch" ScrollViewer.VerticalScrollBarVisibility="Auto">
             <ListBox.ItemTemplate>
              <DataTemplate>
-              <Grid Margin="2,4" ToolTip="{Binding DetailsTooltip}">
-               <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-               <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-               <CheckBox Grid.RowSpan="2" Margin="0,0,8,0" VerticalAlignment="Center" IsChecked="{Binding IsSelected, Mode=TwoWay}" Click="BatchFileSelection_Click"/>
-               <TextBlock Grid.Column="1" Foreground="{StaticResource TextBrush}" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
-               <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,2,8,0" Foreground="{StaticResource MutedTextBrush}" FontSize="11" Text="{Binding DetailsText}" TextTrimming="CharacterEllipsis"/>
-               <Border Grid.Column="2" Grid.RowSpan="2" VerticalAlignment="Center" Background="#3B3218" BorderBrush="#8A7122" BorderThickness="1" CornerRadius="8" Padding="7,2" ToolTip="{Binding WarningTooltip}">
+              <Grid Margin="2,5" ToolTip="{Binding DetailsTooltip}">
+               <Grid.ColumnDefinitions><ColumnDefinition Width="32"/><ColumnDefinition Width="*"/><ColumnDefinition Width="110"/><ColumnDefinition Width="88"/><ColumnDefinition Width="76"/><ColumnDefinition Width="90"/><ColumnDefinition Width="84"/></Grid.ColumnDefinitions>
+               <CheckBox VerticalAlignment="Center" IsChecked="{Binding IsSelected, Mode=TwoWay}" Click="BatchFileSelection_Click"/>
+               <TextBlock Grid.Column="1" Margin="0,0,12,0" VerticalAlignment="Center" Foreground="{StaticResource TextBrush}" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
+               <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Text="{Binding ResolutionText}"/>
+               <TextBlock Grid.Column="3" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Text="{Binding FrameRateText}"/>
+               <TextBlock Grid.Column="4" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Text="{Binding DurationText}"/>
+               <TextBlock Grid.Column="5" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Text="{Binding SizeText}"/>
+               <Border Grid.Column="6" HorizontalAlignment="Left" VerticalAlignment="Center" Background="#3B3218" BorderBrush="#8A7122" BorderThickness="1" CornerRadius="8" Padding="7,2" ToolTip="{Binding WarningTooltip}">
                 <Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><DataTrigger Binding="{Binding HasWarning}" Value="False"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style>
                 <TextBlock Foreground="#F2D46B" FontSize="10" FontWeight="SemiBold" Text="{Binding WarningLabel}"/>
                </Border>

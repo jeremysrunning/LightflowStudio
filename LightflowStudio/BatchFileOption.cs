@@ -9,6 +9,9 @@ internal sealed class BatchFileOption : INotifyPropertyChanged
     private string _detailsTooltip = "";
     private string _warningLabel = "";
     private string _warningTooltip = "";
+    private string _resolutionText = "Reading…";
+    private string _frameRateText = "—";
+    private string _durationText = "—";
 
     public BatchFileOption(string filePath, string displayName, long fileSizeBytes = 0)
     {
@@ -29,6 +32,10 @@ internal sealed class BatchFileOption : INotifyPropertyChanged
     public string WarningLabel { get => _warningLabel; private set => SetField(ref _warningLabel, value); }
     public string WarningTooltip { get => _warningTooltip; private set => SetField(ref _warningTooltip, value); }
     public bool HasWarning => !string.IsNullOrWhiteSpace(WarningLabel);
+    public string ResolutionText { get => _resolutionText; private set => SetField(ref _resolutionText, value); }
+    public string FrameRateText { get => _frameRateText; private set => SetField(ref _frameRateText, value); }
+    public string DurationText { get => _durationText; private set => SetField(ref _durationText, value); }
+    public string SizeText => MediaMetadataPresentation.FormatSize(FileSizeBytes);
 
     public bool IsSelected
     {
@@ -47,6 +54,9 @@ internal sealed class BatchFileOption : INotifyPropertyChanged
         MetadataError = false;
         DetailsText = MediaMetadataPresentation.Details(metadata);
         DetailsTooltip = MediaMetadataPresentation.Tooltip(metadata);
+        ResolutionText = $"{metadata.Width}×{metadata.Height}";
+        FrameRateText = $"{MediaMetadataPresentation.FormatFrameRate(metadata.FrameRate)} fps";
+        DurationText = MediaMetadataPresentation.FormatDuration(metadata.DurationSeconds);
         OnPropertyChanged(nameof(IsAnalyzing));
     }
 
@@ -56,6 +66,9 @@ internal sealed class BatchFileOption : INotifyPropertyChanged
         MetadataError = true;
         DetailsText = $"Details unavailable · {MediaMetadataPresentation.FormatSize(FileSizeBytes)}";
         DetailsTooltip = "FFprobe could not read media details.";
+        ResolutionText = "Unavailable";
+        FrameRateText = "—";
+        DurationText = "—";
         OnPropertyChanged(nameof(IsAnalyzing));
     }
 

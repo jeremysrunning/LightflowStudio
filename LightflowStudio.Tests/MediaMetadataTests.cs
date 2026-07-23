@@ -40,6 +40,11 @@ public class MediaMetadataTests
         var metadata = new MediaMetadata(3840, 2160, 59.94, 134.5, 4_294_967_296, "hevc", true);
         Assert.Equal("3840×2160 · 59.94 fps · 2:14 · 4 GB", MediaMetadataPresentation.Details(metadata));
         Assert.Equal("HEVC video · Audio present", MediaMetadataPresentation.Tooltip(metadata));
+        var option = Option("clip", metadata);
+        Assert.Equal("3840×2160", option.ResolutionText);
+        Assert.Equal("59.94 fps", option.FrameRateText);
+        Assert.Equal("2:14", option.DurationText);
+        Assert.Equal("4 GB", option.SizeText);
     }
 
     [Fact]
