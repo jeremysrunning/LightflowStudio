@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -17,14 +18,22 @@ public partial class MainWindow : Window
     private readonly BatchProgressState _batchProgress = new();
     private readonly string? _commandLineFolder;
     private AppSettings _settings = new();
+    private AppState _state = new();
+    private Process? _activeEncodingProcess;
+    private readonly EncodingPauseController _encodingPause = new();
+    private Stopwatch? _batchStopwatch;
+    private bool _closeAfterCurrent;
+    private bool _forceClose;
 
     public MainWindow()
     {
         InitializeComponent();
+        SourceInitialized += (_, _) => WindowAppearance.EnableDarkTitleBar(this);
         _commandLineFolder = Environment.GetCommandLineArgs().Skip(1).FirstOrDefault(Directory.Exists);
         Loaded += (_, _) =>
         {
             _settings = AppSettingsStore.Load(AppSettingsStore.SettingsPath);
+            _state = AppStateStore.Load(AppStateStore.StatePath);
             PopulateSettingsControls(_settings);
             ApplySettingsToBatch(_settings);
             if (_commandLineFolder is not null) InputFolder.Text = _commandLineFolder;
@@ -57,14 +66,29 @@ public partial class MainWindow : Window
     private int RefreshLuts()
     {
         var selectedPath = LutSelection.SelectedValue as string;
+        var preferredPath = string.IsNullOrWhiteSpace(selectedPath) ? _state.LastLutPath : selectedPath;
         var options = LutCatalog.Discover(_settings.LutFolder);
         LutSelection.ItemsSource = options;
         LutSelection.SelectedItem = options.FirstOrDefault(option =>
-            string.Equals(option.FilePath, selectedPath, StringComparison.OrdinalIgnoreCase)) ?? options.FirstOrDefault();
+            string.Equals(option.FilePath, preferredPath, StringComparison.OrdinalIgnoreCase)) ?? options.FirstOrDefault();
         SettingsMessage.Text = options.Count == 0
             ? $"No .cube LUT files found in {_settings.LutFolder}"
             : $"Loaded {options.Count} LUT{(options.Count == 1 ? "" : "s")}.";
         return options.Count;
+    }
+
+    private void LutSelection_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (SelectedLutPath is not { } path || string.Equals(path, _state.LastLutPath, StringComparison.OrdinalIgnoreCase)) return;
+        _state = new AppState(path);
+        try
+        {
+            AppStateStore.Save(AppStateStore.StatePath, _state);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            SettingsMessage.Text = $"Could not remember LUT selection: {ex.Message}";
+        }
     }
 
     private void BrowseDefaultVideoFolder_Click(object sender, RoutedEventArgs e)
@@ -156,23 +180,49 @@ public partial class MainWindow : Window
     private async void Start_Click(object sender, RoutedEventArgs e)
     {
         if (!ValidateEncoderInputs()) return;
+        _closeAfterCurrent = false;
         _cts = new CancellationTokenSource();
         ToggleEncoding(true);
-        LogBox.Clear();
+
+        var total = 0;
+        var encoded = 0;
+        var failed = 0;
+        var skipped = 0;
+        var outputRoot = "";
+        var outcome = "completed";
+        Stopwatch? batchStart = null;
+
         try
         {
             var files = MediaFileCatalog.Discover(InputFolder.Text, Recursive.IsChecked == true);
             if (files.Count == 0) throw new InvalidOperationException("No supported video files were found.");
-            _batchProgress.StartBatch(files.Count);
+            total = files.Count;
+            _batchProgress.StartBatch(total);
             ApplyProgressState();
 
             var recovery = (RecoveryStrategy)RecoveryMode.SelectedIndex;
             var resolution = (OutputResolution)Resolution.SelectedIndex;
-            var outputRoot = EncodingPathPlanner.OutputRoot(InputFolder.Text, resolution, recovery);
+            outputRoot = EncodingPathPlanner.OutputRoot(InputFolder.Text, resolution, recovery);
             Directory.CreateDirectory(outputRoot);
-            var batchStart = Stopwatch.StartNew();
-            var completed = 0;
+            batchStart = Stopwatch.StartNew();
+            _batchStopwatch = batchStart;
+            var startedAt = DateTime.Now;
 
+            CurrentFileText.Text = $"Analyzing {total} file{(total == 1 ? "" : "s")}…";
+            AppendLog($"Preparing batch — {total} file{(total == 1 ? "" : "s")} discovered.");
+            var durations = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            foreach (var file in files)
+            {
+                _cts.Token.ThrowIfCancellationRequested();
+                durations[file] = await ProbeDurationAsync(file, _cts.Token);
+            }
+            var sourceDuration = TimeSpan.FromSeconds(durations.Values.Where(value => value > 0).Sum());
+            AppendLog(BatchLogFormatter.Started(total, outputRoot, resolution, recovery, sourceDuration, startedAt));
+            AppendDetailedLog($"LUT: {SelectedLutPath}");
+            AppendDetailedLog($"Input folder: {InputFolder.Text}");
+            AppendDetailedLog($"Scanning subfolders: {(Recursive.IsChecked == true ? "Yes" : "No")}; skip completed files: {(SkipExisting.IsChecked == true ? "Yes" : "No")}");
+
+            var completed = 0;
             foreach (var input in files)
             {
                 _cts.Token.ThrowIfCancellationRequested();
@@ -182,28 +232,85 @@ public partial class MainWindow : Window
                 var output = job.OutputPath;
                 _batchProgress.StartFile();
                 FileProgress.Value = _batchProgress.FilePercent;
-                CurrentFileText.Text = $"{completed + 1}/{files.Count}: {Path.GetFileName(input)}";
+                CurrentFileText.Text = $"{completed + 1}/{total}: {Path.GetFileName(input)}";
+                AppendDetailedLog($"File {completed + 1} of {total}: {input}");
+                AppendDetailedLog($"Output: {output}");
+                AppendDetailedLog($"Detected duration: {FormatDuration(durations[input])}");
+
                 if (SkipExisting.IsChecked == true && File.Exists(output) && new FileInfo(output).Length > 0)
                 {
-                    AppendLog($"Skipped existing: {output}"); completed++; UpdateBatch(completed, files.Count, batchStart); continue;
+                    skipped++;
+                    completed++;
+                    AppendLog($"Skipped existing: {output}");
+                    UpdateBatch(completed, total, batchStart);
+                    if (_closeAfterCurrent)
+                    {
+                        outcome = "stopped after current file";
+                        break;
+                    }
+                    continue;
                 }
-                var duration = await ProbeDurationAsync(input, _cts.Token);
-                var args = FfmpegCommandBuilder.Encode(input, output, SelectedLutPath!, recovery, resolution);
-                var exit = await RunFfmpegProgressAsync(args, duration, p =>
+
+                var detailedOutput = ShowEncodingDetails.IsChecked == true;
+                var args = FfmpegCommandBuilder.Encode(input, output, SelectedLutPath!, recovery, resolution, detailedOutput);
+                if (detailedOutput) AppendLog($"[App] Starting FFmpeg: {FormatCommand(_ffmpeg!, args)}");
+                var exit = await RunFfmpegProgressAsync(args, durations[input], detailedOutput, p =>
                 {
                     _batchProgress.ReportFileProgress(p);
                     FileProgress.Value = _batchProgress.FilePercent;
                 }, _cts.Token);
-                if (exit == 0) AppendLog($"Completed: {output}"); else AppendLog($"FAILED ({exit}): {input}");
-                completed++; UpdateBatch(completed, files.Count, batchStart);
-            }
-            CurrentFileText.Text = "Batch complete";
-        }
-        catch (OperationCanceledException) { AppendLog("Encoding cancelled."); CurrentFileText.Text = "Cancelled"; }
-        catch (Exception ex) { MessageBox.Show(ex.Message, "Encoding error", MessageBoxButton.OK, MessageBoxImage.Error); AppendLog(ex.ToString()); }
-        finally { ToggleEncoding(false); _cts.Dispose(); _cts = null; }
-    }
+                if (exit == 0)
+                {
+                    encoded++;
+                    AppendLog($"Completed: {output}");
+                }
+                else
+                {
+                    failed++;
+                    AppendLog($"FAILED ({exit}): {input}");
+                }
 
+                completed++;
+                UpdateBatch(completed, total, batchStart);
+                if (_closeAfterCurrent)
+                {
+                    outcome = "stopped after current file";
+                    break;
+                }
+            }
+
+            CurrentFileText.Text = outcome == "completed" ? "Batch complete" : "Current file complete — closing";
+        }
+        catch (OperationCanceledException)
+        {
+            outcome = "cancelled";
+            AppendLog("Encoding cancelled.");
+            CurrentFileText.Text = "Cancelled";
+        }
+        catch (Exception ex)
+        {
+            outcome = "failed";
+            MessageBox.Show(ex.Message, "Encoding error", MessageBoxButton.OK, MessageBoxImage.Error);
+            AppendLog(ex.ToString());
+        }
+        finally
+        {
+            if (batchStart is not null && total > 0)
+                AppendLog(BatchLogFormatter.Finished(outcome, total, encoded, failed, skipped, batchStart.Elapsed, outputRoot));
+
+            var shouldClose = _closeAfterCurrent;
+            _batchStopwatch = null;
+            _closeAfterCurrent = false;
+            ToggleEncoding(false);
+            _cts.Dispose();
+            _cts = null;
+            if (shouldClose)
+            {
+                _forceClose = true;
+                _ = Dispatcher.BeginInvoke(new Action(Close));
+            }
+        }
+    }
     private bool ValidateEncoderInputs()
     {
         if (_ffmpeg is null || !File.Exists(_ffmpeg)) { MessageBox.Show("FFmpeg was not found. Open Settings to configure ffmpeg.exe."); return false; }
@@ -215,20 +322,41 @@ public partial class MainWindow : Window
     private string? SelectedLutPath => (LutSelection.SelectedItem as LutOption)?.FilePath;
 
 
-    private async Task<int> RunFfmpegProgressAsync(List<string> args, double duration, Action<double> progress, CancellationToken token)
+    private async Task<int> RunFfmpegProgressAsync(List<string> args, double duration, bool detailedOutput, Action<double> progress, CancellationToken token)
     {
         using var process = StartProcess(_ffmpeg!, args, redirectError: true);
-        var errors = new StringBuilder();
-        var errTask = Task.Run(async () => { while (await process.StandardError.ReadLineAsync(token) is { } line) { errors.AppendLine(line); } }, token);
-        while (await process.StandardOutput.ReadLineAsync(token) is { } line)
+        _activeEncodingProcess = process;
+        PauseButton.IsEnabled = true;
+        PauseButton.Content = "Pause";
+        try
         {
-            if (FfmpegProgressParser.TryParsePercent(line, duration, out var percent)) progress(percent);
+            var errors = new StringBuilder();
+            var errTask = Task.Run(async () =>
+            {
+                while (await process.StandardError.ReadLineAsync(token) is { } line)
+                {
+                    errors.AppendLine(line);
+                    if (detailedOutput) AppendLog($"[FFmpeg] {line}");
+                }
+            }, token);
+            while (await process.StandardOutput.ReadLineAsync(token) is { } line)
+            {
+                if (FfmpegProgressParser.TryParsePercent(line, duration, out var percent)) progress(percent);
+            }
+            await process.WaitForExitAsync(token);
+            await errTask;
+            if (process.ExitCode != 0 && !detailedOutput) AppendLog(errors.ToString());
+            progress(100);
+            return process.ExitCode;
         }
-        await process.WaitForExitAsync(token); await errTask;
-        if (process.ExitCode != 0) AppendLog(errors.ToString());
-        progress(100); return process.ExitCode;
+        finally
+        {
+            _encodingPause.Clear();
+            PauseButton.IsEnabled = false;
+            PauseButton.Content = "Pause";
+            if (ReferenceEquals(_activeEncodingProcess, process)) _activeEncodingProcess = null;
+        }
     }
-
     private void UpdateBatch(int completed, int total, Stopwatch sw)
     {
         _batchProgress.ReportBatchProgress(completed, total);
@@ -242,9 +370,134 @@ public partial class MainWindow : Window
         FileProgress.Value = _batchProgress.FilePercent;
         EtaText.Text = _batchProgress.StatusText;
     }
-    private void ToggleEncoding(bool running) { StartButton.IsEnabled = !running; CancelButton.IsEnabled = running; }
-    private void Cancel_Click(object sender, RoutedEventArgs e) => _cts?.Cancel();
-    private void AppendLog(string text) { Dispatcher.Invoke(() => { LogBox.AppendText(text.TrimEnd() + Environment.NewLine); LogBox.ScrollToEnd(); }); }
+    private void ToggleEncoding(bool running)
+    {
+        StartButton.IsEnabled = !running;
+        CancelButton.IsEnabled = running;
+        if (!running)
+        {
+            PauseButton.IsEnabled = false;
+            PauseButton.Content = "Pause";
+        }
+        SetBatchStatus(running ? BatchStatus.Encoding : BatchStatus.Ready);
+    }
+
+    private void SetBatchStatus(BatchStatus status)
+    {
+        var presentation = BatchStatusPresentation.For(status);
+        BatchStateText.Text = presentation.Text;
+        BatchStateText.Foreground = (System.Windows.Media.Brush)FindResource(presentation.ForegroundResource);
+        BatchStateBorder.Background = (System.Windows.Media.Brush)FindResource(presentation.BackgroundResource);
+        BatchStateBorder.BorderBrush = (System.Windows.Media.Brush)FindResource(presentation.BorderResource);
+    }
+    private void Pause_Click(object sender, RoutedEventArgs e)
+    {
+        var process = _activeEncodingProcess;
+        if (process is null) return;
+
+        if (_encodingPause.IsPaused)
+        {
+            ResumeEncoding(process, "Encoding resumed by user.");
+            return;
+        }
+
+        if (!_encodingPause.Pause(process)) return;
+        if (_batchStopwatch?.IsRunning == true) _batchStopwatch.Stop();
+        PauseButton.Content = "Resume";
+        SetBatchStatus(BatchStatus.Paused);
+        AppendLog("Encoding paused by user.");
+    }
+
+    private void ResumeEncoding(Process? process, string logMessage)
+    {
+        _encodingPause.Resume(process);
+        if (_batchStopwatch?.IsRunning == false) _batchStopwatch.Start();
+        PauseButton.Content = "Pause";
+        SetBatchStatus(BatchStatus.Encoding);
+        AppendLog(logMessage);
+    }
+    private void Cancel_Click(object sender, RoutedEventArgs e) => CancelActiveEncoding();
+
+    private void Window_Closing(object? sender, CancelEventArgs e)
+    {
+        if (_cts is null || _forceClose) return;
+
+        e.Cancel = true;
+        var pausedProcess = _activeEncodingProcess;
+        var wasAlreadyPaused = _encodingPause.IsPaused;
+        var processPaused = wasAlreadyPaused || _encodingPause.Pause(pausedProcess);
+        var pausedByDialog = processPaused && !wasAlreadyPaused;
+        if (pausedByDialog && _batchStopwatch?.IsRunning == true) _batchStopwatch.Stop();
+        if (pausedByDialog)
+        {
+            SetBatchStatus(BatchStatus.Paused);
+            PauseButton.Content = "Resume";
+            AppendDetailedLog("Encoding paused while the close options are open.");
+        }
+
+        var dialog = new EncodingCloseDialog { Owner = this };
+        dialog.ShowDialog();
+        if (dialog.Choice == EncodingCloseChoice.CloseNow)
+        {
+            _forceClose = true;
+            CancelActiveEncoding();
+            _encodingPause.Clear();
+            _ = Dispatcher.BeginInvoke(new Action(Close));
+            return;
+        }
+
+        if (processPaused && EncodingClosePolicy.ShouldResumeAfterDialog(wasAlreadyPaused, dialog.Choice))
+        {
+            ResumeEncoding(pausedProcess, dialog.Choice == EncodingCloseChoice.CloseAfterCurrent
+                ? "Encoding resumed to finish the current file before closing."
+                : "Encoding resumed.");
+        }
+
+        if (dialog.Choice == EncodingCloseChoice.CloseAfterCurrent)
+        {
+            _closeAfterCurrent = true;
+            CurrentFileText.Text = "Will close after the current file finishes";
+            AppendLog("Close requested — the application will close after the current file finishes.");
+        }
+    }
+
+    private void CancelActiveEncoding()
+    {
+        _cts?.Cancel();
+        try
+        {
+            if (_activeEncodingProcess is { HasExited: false } process) process.Kill(entireProcessTree: true);
+        }
+        catch (InvalidOperationException)
+        {
+            // The process exited between the state check and the kill request.
+        }
+    }
+    private void AppendLog(string text)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            LogBox.Text = ActivityLog.Append(LogBox.Text, text);
+            LogBox.CaretIndex = LogBox.Text.Length;
+            LogBox.ScrollToEnd();
+        });
+    }
+
+    private void AppendDetailedLog(string text)
+    {
+        if (ShowEncodingDetails.IsChecked == true) AppendLog($"[App] {text}");
+    }
+
+    private static string FormatDuration(double seconds) =>
+        seconds > 0 ? TimeSpan.FromSeconds(seconds).ToString(@"hh\:mm\:ss\.fff") : "Unavailable";
+
+    private static string FormatCommand(string executable, IEnumerable<string> args) =>
+        QuoteCommandArgument(executable) + " " + string.Join(" ", args.Select(QuoteCommandArgument));
+
+    private static string QuoteCommandArgument(string value) =>
+        value.Any(char.IsWhiteSpace) || value.Contains('"')
+            ? "\"" + value.Replace("\"", "\\\"") + "\""
+            : value;
 
     private async Task<double> ProbeDurationAsync(string file, CancellationToken token)
     {
