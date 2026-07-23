@@ -1,6 +1,8 @@
-# Lightflow Studio — Native Windows v0.2
+# Lightflow Studio — Native Windows
 
 **Video processing and workflow tools by Jeremy Running Photography.**
+
+Current version: **0.3.0**
 
 Lightflow Studio is a native C#/.NET 8 WPF desktop application for preparing, processing, inspecting, and recovering video media.
 
@@ -56,6 +58,18 @@ Run the unit test suite with:
 ```powershell
 dotnet test .\LightflowStudio.Tests\LightflowStudio.Tests.csproj
 ```
+
+## Versioning releases
+
+Lightflow Studio follows semantic versioning: patch releases contain fixes and polish, minor releases add backward-compatible features, and major releases mark breaking changes or major stable milestones.
+
+Change the product version from the repository root before preparing a release:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\set-version.ps1 -Version 0.4.0
+```
+
+This updates the authoritative build version and every source-controlled place where the current version is displayed. Automated tests fail if those values drift apart.
 
 For a self-contained, single-file Windows build:
 
@@ -121,4 +135,4 @@ See `PremiereHelper\README.txt`. Adobe has changed Premiere scripting support ov
 - Application preferences are saved under `%LOCALAPPDATA%\Jeremy Running Photography\Lightflow Studio\settings.json` and restored at startup.
 - 4K output is 3840×2160 with aspect-preserving scale and letterbox/pillarbox padding when required.
 - Contact sheets sample one frame every ten seconds and use the first 16 samples.
-- v0.2 is source-complete; FFmpeg binaries are intentionally not redistributed.
+- FFmpeg binaries are intentionally not redistributed.

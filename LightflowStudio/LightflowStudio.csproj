@@ -9,7 +9,6 @@
     <AssemblyName>LightflowStudio</AssemblyName>
     <AssemblyTitle>Lightflow Studio</AssemblyTitle>
     <RootNamespace>LightflowStudio</RootNamespace>
-    <Version>0.2.0</Version>
     <Product>Lightflow Studio</Product>
     <Company>Jeremy Running Photography</Company>
     <Description>Video processing and workflow tools</Description>

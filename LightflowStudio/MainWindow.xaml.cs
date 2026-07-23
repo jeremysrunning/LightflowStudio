@@ -34,6 +34,7 @@ public partial class MainWindow : Window
         _commandLineFolder = Environment.GetCommandLineArgs().Skip(1).FirstOrDefault(Directory.Exists);
         Loaded += (_, _) =>
         {
+            AboutVersionText.Text = $"Version {AppVersion.Display}  •  Built for the creative workflow";
             _settings = AppSettingsStore.Load(AppSettingsStore.SettingsPath);
             _state = AppStateStore.Load(AppStateStore.StatePath);
             PopulateSettingsControls(_settings);
