@@ -61,6 +61,67 @@ public sealed class FfmpegCommandBuilderTests
     }
 
     [Fact]
+    public void Encode_HevcTenBitUsesSelectedPresetTuneAndMultipass()
+    {
+        var options = EncodingPresetCatalog.Get(EncodingPreset.MaximumQuality) with { Tune = EncoderTune.LowLatency, Container = OutputContainer.Mkv };
+
+        var args = FfmpegCommandBuilder.Encode("in", "out.mkv", "lut", RecoveryStrategy.Normal,
+            OutputResolution.Source, encoding: options);
+
+        AssertContainsSequence(args, "-c:v", "hevc_nvenc");
+        AssertContainsSequence(args, "-preset", "p7", "-tune", "ll");
+        AssertContainsSequence(args, "-multipass", "fullres");
+        AssertContainsSequence(args, "-pix_fmt", "p010le");
+        Assert.DoesNotContain("+faststart", args);
+    }
+
+    [Fact]
+    public void Encode_VariableBitrateAddsTargetMaximumAndBuffer()
+    {
+        var options = EncodingPresetCatalog.Recommended with
+        {
+            RateControl = RateControlMode.VariableBitrate,
+            TargetBitrateMbps = 30,
+            MaxBitrateMbps = 60
+        };
+
+        var args = FfmpegCommandBuilder.Encode("in", "out.mp4", "lut", RecoveryStrategy.Normal,
+            OutputResolution.Source, encoding: options);
+
+        AssertContainsSequence(args, "-rc", "vbr", "-b:v", "30M", "-maxrate", "60M", "-bufsize", "120M");
+        Assert.DoesNotContain("-cq", args);
+    }
+
+    [Fact]
+    public void Encode_AdvancedFiltersAndAacOptionsAreApplied()
+    {
+        var options = EncodingPresetCatalog.Recommended with
+        {
+            Deinterlace = true,
+            FrameRate = 29.97,
+            AudioMode = AudioEncodingMode.Aac,
+            AudioBitrateKbps = 256,
+            AudioSampleRate = 48000,
+            AudioChannels = 2
+        };
+
+        var args = FfmpegCommandBuilder.Encode("in", "out.mov", "lut", RecoveryStrategy.Normal,
+            OutputResolution.FullHd, encoding: options);
+
+        AssertContainsSequence(args, "-vf", "lut3d=file='lut',bwdif,fps=29.97,scale=-2:1080");
+        AssertContainsSequence(args, "-c:a", "aac", "-b:a", "256k", "-ar", "48000", "-ac", "2");
+        AssertContainsSequence(args, "-movflags", "+faststart");
+    }
+
+    [Fact]
+    public void Encode_RejectsInvalidOptionCombination()
+    {
+        var invalid = EncodingPresetCatalog.Recommended with { PixelFormat = VideoPixelFormat.P010 };
+
+        Assert.Throws<ArgumentException>(() => FfmpegCommandBuilder.Encode("in", "out", "lut",
+            RecoveryStrategy.Normal, OutputResolution.Source, encoding: invalid));
+    }
+    [Fact]
     public void ProbeAndInspectArgumentsTargetProvidedFile()
     {
         Assert.Equal(["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", "clip.mov"], FfmpegCommandBuilder.ProbeDuration("clip.mov"));

@@ -19,7 +19,15 @@ public sealed class SettingsPreferencesTests : IDisposable
             DefaultResolution = OutputResolution.UltraHd,
             DefaultRecovery = RecoveryStrategy.Salvage,
             IncludeSubfolders = true,
-            SkipExisting = false
+            SkipExisting = false,
+            EncodingPreset = EncodingPreset.EfficientHevc,
+            Encoding = EncodingPresetCatalog.Get(EncodingPreset.EfficientHevc) with
+            {
+                RateControl = RateControlMode.VariableBitrate,
+                TargetBitrateMbps = 35,
+                MaxBitrateMbps = 70,
+                Container = OutputContainer.Mkv
+            }
         };
 
         AppSettingsStore.Save(SettingsPath, expected);

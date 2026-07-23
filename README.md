@@ -7,7 +7,9 @@ Lightflow Studio is a native C#/.NET 8 WPF desktop application for preparing, pr
 ## Features
 
 - Folder batch encoding with a dropdown of `.cube` LUTs from a configurable folder
-- Dedicated Settings tab for default folders, FFmpeg, and batch preferences
+- Dedicated Settings tab for default folders, FFmpeg, batch preferences, and advanced encoding controls
+- Named encoding presets with recommended-default restoration and custom overrides
+- NVIDIA NVENC H.264/HEVC with quality, bitrate, tuning, multipass, AQ, 8/10-bit, frame-rate, deinterlace, audio, and container controls
 - Branded dark-studio interface with card-based workflows and a multi-size Windows application icon
 - 1080p, 4K UHD, or source-resolution output
 - High-quality NVIDIA NVENC H.264 (`p7`, full-resolution multipass, adaptive quantization)
@@ -26,7 +28,7 @@ Lightflow Studio is a native C#/.NET 8 WPF desktop application for preparing, pr
 
 - Windows 10/11, 64-bit
 - NVIDIA GPU and current NVIDIA driver for NVENC encoding
-- FFmpeg containing `h264_nvenc`, plus FFprobe
+- FFmpeg containing `h264_nvenc` and `hevc_nvenc`, plus FFprobe
 - .NET 8 SDK only when building from source
 
 The app searches for FFmpeg in this order:
@@ -63,6 +65,18 @@ powershell.exe -ExecutionPolicy Bypass -File .\publish-self-contained.ps1
 
 The output is placed in `publish\LightflowStudio-win-x64` and does not require a separate .NET runtime.
 
+## Encoding presets and advanced options
+
+Lightflow Studio ships with four named starting points:
+
+- **Recommended:** H.264 NVENC, P7, constant quality 18, full-resolution multipass, spatial/temporal AQ, and source audio copy.
+- **Maximum Quality:** 10-bit HEVC, constant quality 16, full-resolution multipass, and high-bitrate AAC.
+- **Fast Preview:** H.264 P4, constant quality 25, quarter-resolution multipass, and lightweight AAC.
+- **Efficient HEVC:** HEVC P6, constant quality 21, full-resolution multipass, and AAC.
+
+Settings can customize the codec, container, NVENC preset, tuning, rate-control mode, quality or bitrates, multipass, adaptive quantization, pixel format, frame rate, deinterlacing, audio encoding, sample rate, channels, and fast-start behavior. Invalid combinations are rejected before settings are saved or encoding begins.
+
+The internal settings model reserves CPU, AMD AMF, and Intel Quick Sync backends for future releases. Only NVIDIA NVENC is enabled in this version.
 ## FFmpeg setup
 
 Install through Windows Package Manager:
@@ -75,7 +89,7 @@ Open a new PowerShell window and verify:
 
 ```powershell
 ffmpeg -version
-ffmpeg -hide_banner -encoders | Select-String h264_nvenc
+ffmpeg -hide_banner -encoders | Select-String "h264_nvenc|hevc_nvenc"
 ```
 
 Alternatively, place `ffmpeg.exe` and `ffprobe.exe` under:
@@ -102,7 +116,7 @@ See `PremiereHelper\README.txt`. Adobe has changed Premiere scripting support ov
 
 ## Notes
 
-- Originals are never overwritten. Encoded files go into a new `Lightflow-*` subfolder.
+- Originals are never overwritten. Encoded files go into a new `Lightflow-*` subfolder. HEVC and non-MP4 jobs receive distinct folder suffixes so skip-existing behavior cannot confuse different output formats.
 - The LUT dropdown defaults to `J:\Photography\LUTs`. Choose another LUT folder in Settings, or use **Refresh** after adding LUT files to the current folder.
 - Application preferences are saved under `%LOCALAPPDATA%\Jeremy Running Photography\Lightflow Studio\settings.json` and restored at startup.
 - 4K output is 3840×2160 with aspect-preserving scale and letterbox/pillarbox padding when required.
