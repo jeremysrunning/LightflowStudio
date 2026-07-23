@@ -20,6 +20,8 @@ public partial class MainWindow : Window
     private AppSettings _settings = new();
     private AppState _state = new();
     private Process? _activeEncodingProcess;
+    private readonly EncodingPauseController _encodingPause = new();
+    private Stopwatch? _batchStopwatch;
     private bool _closeAfterCurrent;
     private bool _forceClose;
 
@@ -203,6 +205,7 @@ public partial class MainWindow : Window
             outputRoot = EncodingPathPlanner.OutputRoot(InputFolder.Text, resolution, recovery);
             Directory.CreateDirectory(outputRoot);
             batchStart = Stopwatch.StartNew();
+            _batchStopwatch = batchStart;
             var startedAt = DateTime.Now;
 
             CurrentFileText.Text = $"Analyzing {total} file{(total == 1 ? "" : "s")}…";
@@ -296,6 +299,7 @@ public partial class MainWindow : Window
                 AppendLog(BatchLogFormatter.Finished(outcome, total, encoded, failed, skipped, batchStart.Elapsed, outputRoot));
 
             var shouldClose = _closeAfterCurrent;
+            _batchStopwatch = null;
             _closeAfterCurrent = false;
             ToggleEncoding(false);
             _cts.Dispose();
@@ -375,20 +379,32 @@ public partial class MainWindow : Window
         if (_cts is null || _forceClose) return;
 
         e.Cancel = true;
+        var pausedProcess = _activeEncodingProcess;
+        var processPaused = _encodingPause.Pause(pausedProcess);
+        var timerPaused = processPaused && _batchStopwatch?.IsRunning == true;
+        if (timerPaused) _batchStopwatch!.Stop();
+        if (processPaused) AppendDetailedLog("Encoding paused while the close options are open.");
+
         var dialog = new EncodingCloseDialog { Owner = this };
         dialog.ShowDialog();
-        switch (dialog.Choice)
+        if (dialog.Choice == EncodingCloseChoice.CloseNow)
         {
-            case EncodingCloseChoice.CloseAfterCurrent:
-                _closeAfterCurrent = true;
-                CurrentFileText.Text = "Will close after the current file finishes";
-                AppendLog("Close requested — the application will close after the current file finishes.");
-                break;
-            case EncodingCloseChoice.CloseNow:
-                _forceClose = true;
-                CancelActiveEncoding();
-                _ = Dispatcher.BeginInvoke(new Action(Close));
-                break;
+            _forceClose = true;
+            CancelActiveEncoding();
+            _encodingPause.Clear();
+            _ = Dispatcher.BeginInvoke(new Action(Close));
+            return;
+        }
+
+        _encodingPause.Resume(pausedProcess);
+        if (timerPaused) _batchStopwatch?.Start();
+        if (processPaused) AppendDetailedLog("Encoding resumed.");
+
+        if (dialog.Choice == EncodingCloseChoice.CloseAfterCurrent)
+        {
+            _closeAfterCurrent = true;
+            CurrentFileText.Text = "Will close after the current file finishes";
+            AppendLog("Close requested — the application will close after the current file finishes.");
         }
     }
 
