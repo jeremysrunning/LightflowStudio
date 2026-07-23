@@ -119,8 +119,16 @@ public partial class MainWindow : Window
         OutputSameFolderPanel.Visibility = mode == OutputDestinationMode.SameFolder ? Visibility.Visible : Visibility.Collapsed;
         OutputSubfolderPanel.Visibility = mode == OutputDestinationMode.Subfolder ? Visibility.Visible : Visibility.Collapsed;
         OutputSpecificPanel.Visibility = mode == OutputDestinationMode.SpecificFolder ? Visibility.Visible : Visibility.Collapsed;
+        UpdatePreserveFolderStructureUi();
     }
 
+    private void UpdatePreserveFolderStructureUi()
+    {
+        var mode = (OutputDestinationMode)Math.Clamp(OutputMode.SelectedIndex, 0, 2);
+        PreserveFolderStructure.Visibility = FolderStructurePolicy.IsAvailable(Recursive.IsChecked == true, mode)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
     private void Resolution_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         if (!IsLoaded) return;
@@ -165,7 +173,16 @@ public partial class MainWindow : Window
     }
     private void Recursive_Changed(object sender, RoutedEventArgs e)
     {
-        if (IsLoaded) RefreshBatchFiles();
+        if (!IsLoaded) return;
+        UpdatePreserveFolderStructureUi();
+        RefreshBatchFiles();
+    }
+    private void SettingsRecursive_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        SettingsPreserveFolderStructure.Visibility = SettingsRecursive.IsChecked == true
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
     private void RefreshBatchFiles_Click(object sender, RoutedEventArgs e) => RefreshBatchFiles();
     private void BatchFileSelection_Click(object sender, RoutedEventArgs e)
@@ -370,6 +387,7 @@ public partial class MainWindow : Window
             DefaultResolution = (OutputResolution)SettingsResolution.SelectedIndex,
             DefaultRecovery = (RecoveryStrategy)SettingsRecoveryMode.SelectedIndex,
             IncludeSubfolders = SettingsRecursive.IsChecked == true,
+            PreserveFolderStructure = SettingsPreserveFolderStructure.IsChecked == true,
             OverwriteExistingFiles = SettingsOverwriteExisting.IsChecked == true,
             EncodingPreset = selectedPreset,
             Encoding = encoding
@@ -448,6 +466,7 @@ public partial class MainWindow : Window
         SettingsResolution.SelectedIndex = (int)settings.DefaultResolution;
         SettingsRecoveryMode.SelectedIndex = (int)settings.DefaultRecovery;
         SettingsRecursive.IsChecked = settings.IncludeSubfolders;
+        SettingsPreserveFolderStructure.IsChecked = settings.PreserveFolderStructure;
         SettingsOverwriteExisting.IsChecked = settings.OverwriteExistingFiles;
         SettingsEncodingPreset.SelectedIndex = (int)settings.EncodingPreset;
         PopulateEncodingControls(settings.Encoding);
@@ -484,6 +503,7 @@ public partial class MainWindow : Window
         Resolution.SelectedIndex = (int)settings.DefaultResolution;
         RecoveryMode.SelectedIndex = (int)settings.DefaultRecovery;
         Recursive.IsChecked = settings.IncludeSubfolders;
+        PreserveFolderStructure.IsChecked = settings.PreserveFolderStructure;
         OverwriteExisting.IsChecked = settings.OverwriteExistingFiles;
         OutputMode.SelectedIndex = (int)OutputDestinationMode.Subfolder;
         OutputSpecificFolder.Text = "";
@@ -500,6 +520,7 @@ public partial class MainWindow : Window
         Resolution.SelectedIndex = (int)state.LastResolution;
         RecoveryMode.SelectedIndex = (int)state.LastRecovery;
         Recursive.IsChecked = state.LastIncludeSubfolders;
+        PreserveFolderStructure.IsChecked = state.LastPreserveFolderStructure;
         OverwriteExisting.IsChecked = state.LastOverwriteExistingFiles;
         OutputMode.SelectedIndex = (int)state.LastOutputMode;
         OutputSpecificFolder.Text = state.LastSpecificOutputFolder;
@@ -521,6 +542,7 @@ public partial class MainWindow : Window
             LastResolution = (OutputResolution)Math.Clamp(Resolution.SelectedIndex, 0, 2),
             LastRecovery = (RecoveryStrategy)Math.Clamp(RecoveryMode.SelectedIndex, 0, 2),
             LastIncludeSubfolders = Recursive.IsChecked == true,
+            LastPreserveFolderStructure = PreserveFolderStructure.IsChecked == true,
             LastOverwriteExistingFiles = OverwriteExisting.IsChecked == true,
             LastOutputMode = (OutputDestinationMode)Math.Clamp(OutputMode.SelectedIndex, 0, 2),
             LastOutputSubfolder = OutputSubfolderName.Text,
@@ -538,6 +560,11 @@ public partial class MainWindow : Window
         _subfolderUsesResolutionDefault ? "" : OutputSubfolderName.Text,
         OutputSpecificFolder.Text,
         _filenameSuffixUsesResolutionDefault ? "" : OutputFilenameSuffix.Text);
+
+    private bool ShouldPreserveFolderStructure() => FolderStructurePolicy.ShouldPreserve(
+        Recursive.IsChecked == true,
+        (OutputDestinationMode)Math.Clamp(OutputMode.SelectedIndex, 0, 2),
+        PreserveFolderStructure.IsChecked == true);
     private void BrowseMedia_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog { Filter = "Video files|*.mp4;*.mov;*.mxf;*.mkv;*.avi|All files|*.*" };
@@ -591,14 +618,14 @@ public partial class MainWindow : Window
             AppendDetailedLog($"LUT: {SelectedLutPath}");
             AppendDetailedLog($"Input folder: {InputFolder.Text}");
             AppendDetailedLog($"Encoder: {_settings.Encoding.Codec} via NVIDIA NVENC; preset P{_settings.Encoding.EncoderPreset}; {_settings.Encoding.RateControl}; {_settings.Encoding.Container}");
-            AppendDetailedLog($"Scanning subfolders: {(Recursive.IsChecked == true ? "Yes" : "No")}; overwrite existing files: {(OverwriteExisting.IsChecked == true ? "Yes" : "No")}");
+            AppendDetailedLog($"Scanning subfolders: {(Recursive.IsChecked == true ? "Yes" : "No")}; preserve folder structure: {(ShouldPreserveFolderStructure() ? "Yes" : "No")}; overwrite existing files: {(OverwriteExisting.IsChecked == true ? "Yes" : "No")}");
 
             var completed = 0;
             foreach (var input in files)
             {
                 _cts.Token.ThrowIfCancellationRequested();
                 var suffix = OutputDestinationPlanner.ResolveFilenameSuffix(resolution, CurrentOutputDestination());
-                var job = EncodingPathPlanner.CreateJob(InputFolder.Text, outputRoot, input, resolution, _settings.Encoding.Container, suffix);
+                var job = EncodingPathPlanner.CreateJob(InputFolder.Text, outputRoot, input, resolution, _settings.Encoding.Container, suffix, ShouldPreserveFolderStructure());
                 var outDir = Path.GetDirectoryName(job.OutputPath)!;
                 Directory.CreateDirectory(outDir);
                 var output = job.OutputPath;
@@ -693,8 +720,13 @@ public partial class MainWindow : Window
         {
             var outputOptions = CurrentOutputDestination();
             var outputResolution = (OutputResolution)Math.Clamp(Resolution.SelectedIndex, 0, 2);
-            _ = OutputDestinationPlanner.ResolveRoot(InputFolder.Text, outputResolution, outputOptions);
-            _ = OutputDestinationPlanner.ResolveFilenameSuffix(outputResolution, outputOptions);
+            var outputRoot = OutputDestinationPlanner.ResolveRoot(InputFolder.Text, outputResolution, outputOptions);
+            var suffix = OutputDestinationPlanner.ResolveFilenameSuffix(outputResolution, outputOptions);
+            var jobs = BatchFileSelection.SelectedFiles(_batchFiles)
+                .Select(file => EncodingPathPlanner.CreateJob(InputFolder.Text, outputRoot, file, outputResolution,
+                    _settings.Encoding.Container, suffix, ShouldPreserveFolderStructure()));
+            if (EncodingPathPlanner.HasOutputCollisions(jobs))
+                throw new ArgumentException("Multiple selected files would create the same output filename. Choose Same folder or Specific folder with Preserve source folder structure, or rename the source files.");
         }
         catch (ArgumentException ex) { MessageBox.Show(ex.Message, "Output location", MessageBoxButton.OK, MessageBoxImage.Warning); return false; }
         if (SelectedLutPath is not { } lut || !File.Exists(lut) || !lut.EndsWith(".cube", StringComparison.OrdinalIgnoreCase)) { MessageBox.Show("Select a valid .cube LUT from the LUT dropdown."); return false; }

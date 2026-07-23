@@ -121,7 +121,10 @@
           <TextBlock Style="{StaticResource FieldLabel}" Text="SPECIFIC OUTPUT FOLDER"/>
           <DockPanel><Button DockPanel.Dock="Right" Content="Browse…" Click="BrowseOutputFolder_Click"/><TextBox x:Name="OutputSpecificFolder" LostKeyboardFocus="OutputDestination_LostKeyboardFocus"/></DockPanel>
          </StackPanel>
-         <CheckBox Grid.Row="1" Grid.ColumnSpan="2" x:Name="OverwriteExisting" Margin="6,5,6,0" Content="Overwrite existing files"/>
+         <WrapPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,5,0,0">
+          <CheckBox x:Name="PreserveFolderStructure" Margin="6,5,6,0" Content="Preserve source folder structure" Visibility="Collapsed" ToolTip="Keep each file in the same relative subfolder beneath the output location."/>
+          <CheckBox x:Name="OverwriteExisting" Margin="6,5,6,0" Content="Overwrite existing files"/>
+         </WrapPanel>
         </Grid>
         </Border>
         <StackPanel Grid.Row="4" Grid.Column="0" Margin="0,10,8,0">
@@ -222,7 +225,7 @@
       <TextBlock Grid.ColumnSpan="2" Style="{StaticResource SectionTitle}" Margin="4,0,4,12" Text="Batch Encode Defaults"/>
       <StackPanel Grid.Row="1" Margin="0,0,8,0"><TextBlock Style="{StaticResource FieldLabel}" Text="RESOLUTION"/><ComboBox x:Name="SettingsResolution"><ComboBoxItem Content="1080p"/><ComboBoxItem Content="4K UHD"/><ComboBoxItem Content="Source resolution"/></ComboBox></StackPanel>
       <StackPanel Grid.Row="1" Grid.Column="1" Margin="8,0,0,0"><TextBlock Style="{StaticResource FieldLabel}" Text="RECOVERY MODE"/><ComboBox x:Name="SettingsRecoveryMode"><ComboBoxItem Content="Normal"/><ComboBoxItem Content="Salvage audio + video"/><ComboBoxItem Content="Video only"/></ComboBox></StackPanel>
-      <WrapPanel Grid.Row="2" Grid.ColumnSpan="2" Margin="4,8,0,0"><CheckBox x:Name="SettingsRecursive" Content="Include subfolders by default"/><CheckBox x:Name="SettingsOverwriteExisting" Content="Overwrite existing output files by default"/></WrapPanel>
+      <WrapPanel Grid.Row="2" Grid.ColumnSpan="2" Margin="4,8,0,0"><CheckBox x:Name="SettingsRecursive" Content="Include subfolders by default" Checked="SettingsRecursive_Changed" Unchecked="SettingsRecursive_Changed"/><CheckBox x:Name="SettingsPreserveFolderStructure" Content="Preserve source folder structure by default" Visibility="Collapsed"/><CheckBox x:Name="SettingsOverwriteExisting" Content="Overwrite existing output files by default"/></WrapPanel>
 
      </Grid></Border>
      <Border Grid.Row="3" Style="{StaticResource Card}">

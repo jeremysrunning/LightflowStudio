@@ -41,11 +41,17 @@ internal static class EncodingPathPlanner
         _ => throw new ArgumentOutOfRangeException(nameof(container))
     };
 
-    public static EncodingJob CreateJob(string inputFolder, string outputRoot, string input, OutputResolution resolution, OutputContainer container = OutputContainer.Mp4, string? filenameSuffix = null)
+    public static EncodingJob CreateJob(string inputFolder, string outputRoot, string input, OutputResolution resolution,
+        OutputContainer container = OutputContainer.Mp4, string? filenameSuffix = null, bool preserveFolderStructure = true)
     {
-        var relativeDirectory = Path.GetDirectoryName(Path.GetRelativePath(inputFolder, input)) ?? "";
+        var relativeDirectory = preserveFolderStructure
+            ? Path.GetDirectoryName(Path.GetRelativePath(inputFolder, input)) ?? ""
+            : "";
         var output = Path.Combine(outputRoot, relativeDirectory,
             Path.GetFileNameWithoutExtension(input) + (filenameSuffix ?? $"_{ResolutionName(resolution)}") + ContainerExtension(container));
         return new EncodingJob(input, output);
     }
+
+    public static bool HasOutputCollisions(IEnumerable<EncodingJob> jobs) =>
+        jobs.GroupBy(job => job.OutputPath, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1);
 }

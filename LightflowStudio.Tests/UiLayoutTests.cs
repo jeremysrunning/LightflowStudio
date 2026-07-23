@@ -47,7 +47,8 @@ public class UiLayoutTests
         var outputMode = Named(document, "OutputMode");
 
         Assert.Equal(inputFolder.Parent!.Parent, recursive.Parent);
-        Assert.Equal(outputMode.Parent!.Parent, overwrite.Parent);
+        Assert.Equal(outputMode.Parent!.Parent, overwrite.Parent!.Parent);
+        Assert.Equal(overwrite.Parent, Named(document, "PreserveFolderStructure").Parent);
         Assert.DoesNotContain(document.Descendants(ns + "CheckBox"),
             element => (string?)element.Attribute("Content") == "Skip completed files");
     }

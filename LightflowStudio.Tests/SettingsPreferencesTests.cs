@@ -19,6 +19,7 @@ public sealed class SettingsPreferencesTests : IDisposable
             DefaultResolution = OutputResolution.UltraHd,
             DefaultRecovery = RecoveryStrategy.Salvage,
             IncludeSubfolders = true,
+            PreserveFolderStructure = false,
             OverwriteExistingFiles = true,
             EncodingPreset = EncodingPreset.EfficientHevc,
             Encoding = EncodingPresetCatalog.Get(EncodingPreset.EfficientHevc) with
@@ -49,6 +50,7 @@ public sealed class SettingsPreferencesTests : IDisposable
         Assert.Equal(OutputResolution.FullHd, settings.DefaultResolution);
         Assert.Equal(RecoveryStrategy.Normal, settings.DefaultRecovery);
         Assert.False(settings.IncludeSubfolders);
+        Assert.True(settings.PreserveFolderStructure);
         Assert.False(settings.OverwriteExistingFiles);
     }
 
