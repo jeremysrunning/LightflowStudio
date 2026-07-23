@@ -24,6 +24,15 @@ public sealed class EncodingPathPlannerTests
     }
 
     [Fact]
+    public void OutputRoot_SeparatesNonDefaultCodecAndContainer()
+    {
+        var options = EncodingPresetCatalog.Get(EncodingPreset.EfficientHevc) with { Container = OutputContainer.Mkv };
+
+        var output = EncodingPathPlanner.OutputRoot("input", OutputResolution.UltraHd, RecoveryStrategy.Normal, options);
+
+        Assert.EndsWith("Lightflow-4K-LUT-HEVC-MKV", output);
+    }
+    [Fact]
     public void CreateJob_PreservesRelativeFoldersAndUsesMp4Output()
     {
         var inputRoot = Path.Combine("C:", "videos");
@@ -36,6 +45,17 @@ public sealed class EncodingPathPlannerTests
         Assert.Equal(Path.Combine(outputRoot, "day-one", "clip_4K.mp4"), job.OutputPath);
     }
 
+    [Theory]
+    [InlineData(OutputContainer.Mp4, ".mp4")]
+    [InlineData(OutputContainer.Mkv, ".mkv")]
+    [InlineData(OutputContainer.Mov, ".mov")]
+    internal void CreateJob_UsesSelectedContainer(OutputContainer container, string extension)
+    {
+        var job = EncodingPathPlanner.CreateJob("input", "output", Path.Combine("input", "clip.mov"),
+            OutputResolution.Source, container);
+
+        Assert.EndsWith(extension, job.OutputPath);
+    }
     [Fact]
     public void ResolutionName_RejectsUnknownValue()
     {

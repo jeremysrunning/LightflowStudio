@@ -12,7 +12,7 @@ internal static class EncodingPathPlanner
         _ => throw new ArgumentOutOfRangeException(nameof(resolution))
     };
 
-    public static string OutputRoot(string inputFolder, OutputResolution resolution, RecoveryStrategy recovery)
+    public static string OutputRoot(string inputFolder, OutputResolution resolution, RecoveryStrategy recovery, EncodingOptions? encoding = null)
     {
         var suffix = recovery switch
         {
@@ -21,14 +21,31 @@ internal static class EncodingPathPlanner
             RecoveryStrategy.VideoOnly => "-VideoOnly",
             _ => throw new ArgumentOutOfRangeException(nameof(recovery))
         };
-        return Path.Combine(inputFolder, $"Lightflow-{ResolutionName(resolution)}-LUT{suffix}");
+        var options = EncodingOptions.Normalize(encoding);
+        var codecSuffix = options.Codec == VideoCodec.Hevc ? "-HEVC" : "";
+        var containerSuffix = options.Container switch
+        {
+            OutputContainer.Mp4 => "",
+            OutputContainer.Mkv => "-MKV",
+            OutputContainer.Mov => "-MOV",
+            _ => throw new ArgumentOutOfRangeException(nameof(options.Container))
+        };
+        return Path.Combine(inputFolder, $"Lightflow-{ResolutionName(resolution)}-LUT{suffix}{codecSuffix}{containerSuffix}");
     }
 
-    public static EncodingJob CreateJob(string inputFolder, string outputRoot, string input, OutputResolution resolution)
+    public static string ContainerExtension(OutputContainer container) => container switch
+    {
+        OutputContainer.Mp4 => ".mp4",
+        OutputContainer.Mkv => ".mkv",
+        OutputContainer.Mov => ".mov",
+        _ => throw new ArgumentOutOfRangeException(nameof(container))
+    };
+
+    public static EncodingJob CreateJob(string inputFolder, string outputRoot, string input, OutputResolution resolution, OutputContainer container = OutputContainer.Mp4)
     {
         var relativeDirectory = Path.GetDirectoryName(Path.GetRelativePath(inputFolder, input)) ?? "";
         var output = Path.Combine(outputRoot, relativeDirectory,
-            Path.GetFileNameWithoutExtension(input) + $"_{ResolutionName(resolution)}.mp4");
+            Path.GetFileNameWithoutExtension(input) + $"_{ResolutionName(resolution)}{ContainerExtension(container)}");
         return new EncodingJob(input, output);
     }
 }

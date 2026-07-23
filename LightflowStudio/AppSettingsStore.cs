@@ -12,6 +12,8 @@ internal sealed record AppSettings
     public RecoveryStrategy DefaultRecovery { get; init; } = RecoveryStrategy.Normal;
     public bool IncludeSubfolders { get; init; }
     public bool SkipExisting { get; init; } = true;
+    public EncodingPreset EncodingPreset { get; init; } = EncodingPreset.Recommended;
+    public EncodingOptions Encoding { get; init; } = EncodingPresetCatalog.Recommended;
 
     public AppSettings() { }
     public AppSettings(string lutFolder) => LutFolder = lutFolder;
@@ -25,7 +27,9 @@ internal sealed record AppSettings
             LutFolder = string.IsNullOrWhiteSpace(settings.LutFolder) ? LutCatalog.DefaultFolder : settings.LutFolder.Trim(),
             FfmpegPath = settings.FfmpegPath?.Trim() ?? "",
             DefaultResolution = Enum.IsDefined(settings.DefaultResolution) ? settings.DefaultResolution : OutputResolution.FullHd,
-            DefaultRecovery = Enum.IsDefined(settings.DefaultRecovery) ? settings.DefaultRecovery : RecoveryStrategy.Normal
+            DefaultRecovery = Enum.IsDefined(settings.DefaultRecovery) ? settings.DefaultRecovery : RecoveryStrategy.Normal,
+            EncodingPreset = Enum.IsDefined(settings.EncodingPreset) ? settings.EncodingPreset : EncodingPreset.Recommended,
+            Encoding = EncodingOptions.Normalize(settings.Encoding)
         };
     }
 }

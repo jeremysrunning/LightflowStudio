@@ -24,6 +24,8 @@ public partial class MainWindow : Window
     private Stopwatch? _batchStopwatch;
     private bool _closeAfterCurrent;
     private bool _forceClose;
+    private static readonly double[] FrameRateValues = [0, 23.976, 24, 25, 29.97, 30, 50, 59.94, 60];
+    private static readonly int[] AudioSampleRates = [0, 44100, 48000, 96000];
 
     public MainWindow()
     {
@@ -112,7 +114,12 @@ public partial class MainWindow : Window
 
     private void SaveSettings_Click(object sender, RoutedEventArgs e)
     {
-        var settings = ReadSettingsControls();
+        if (!TryReadEncodingControls(out var encoding, out var encodingError))
+        {
+            MessageBox.Show(encodingError, "Encoding settings", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        var settings = ReadSettingsControls(encoding);
         if (!string.IsNullOrWhiteSpace(settings.FfmpegPath) && !File.Exists(settings.FfmpegPath))
         {
             MessageBox.Show("The configured FFmpeg executable does not exist.", "Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -140,17 +147,89 @@ public partial class MainWindow : Window
         SettingsMessage.Text = "Default values loaded. Select Save Settings to apply them.";
     }
 
-    private AppSettings ReadSettingsControls() => AppSettings.Normalize(new AppSettings
+    private AppSettings ReadSettingsControls(EncodingOptions encoding)
     {
-        DefaultVideoFolder = SettingsDefaultVideoFolder.Text,
-        LutFolder = SettingsLutFolder.Text,
-        FfmpegPath = SettingsFfmpegPath.Text,
-        DefaultResolution = (OutputResolution)SettingsResolution.SelectedIndex,
-        DefaultRecovery = (RecoveryStrategy)SettingsRecoveryMode.SelectedIndex,
-        IncludeSubfolders = SettingsRecursive.IsChecked == true,
-        SkipExisting = SettingsSkipExisting.IsChecked == true
-    });
+        var selectedPreset = (EncodingPreset)Math.Clamp(SettingsEncodingPreset.SelectedIndex, 0, 4);
+        if (selectedPreset != EncodingPreset.Custom && encoding != EncodingPresetCatalog.Get(selectedPreset))
+            selectedPreset = EncodingPreset.Custom;
+        return AppSettings.Normalize(new AppSettings
+        {
+            DefaultVideoFolder = SettingsDefaultVideoFolder.Text,
+            LutFolder = SettingsLutFolder.Text,
+            FfmpegPath = SettingsFfmpegPath.Text,
+            DefaultResolution = (OutputResolution)SettingsResolution.SelectedIndex,
+            DefaultRecovery = (RecoveryStrategy)SettingsRecoveryMode.SelectedIndex,
+            IncludeSubfolders = SettingsRecursive.IsChecked == true,
+            SkipExisting = SettingsSkipExisting.IsChecked == true,
+            EncodingPreset = selectedPreset,
+            Encoding = encoding
+        });
+    }
 
+    private bool TryReadEncodingControls(out EncodingOptions options, out string error)
+    {
+        options = EncodingPresetCatalog.Recommended;
+        error = "";
+        if (!TryReadInt(SettingsEncoderPreset.Text, "NVENC preset", out var encoderPreset)
+            || !TryReadInt(SettingsQuality.Text, "Quality", out var quality)
+            || !TryReadInt(SettingsTargetBitrate.Text, "Target bitrate", out var targetBitrate)
+            || !TryReadInt(SettingsMaxBitrate.Text, "Maximum bitrate", out var maxBitrate)
+            || !TryReadInt(SettingsAqStrength.Text, "AQ strength", out var aqStrength)
+            || !TryReadInt(SettingsAudioBitrate.Text, "AAC bitrate", out var audioBitrate))
+        {
+            error = _numericSettingError;
+            return false;
+        }
+
+        options = new EncodingOptions
+        {
+            Backend = EncoderBackend.NvidiaNvenc,
+            Codec = (VideoCodec)SettingsVideoCodec.SelectedIndex,
+            EncoderPreset = encoderPreset,
+            Tune = (EncoderTune)SettingsTune.SelectedIndex,
+            RateControl = (RateControlMode)SettingsRateControl.SelectedIndex,
+            Quality = quality,
+            TargetBitrateMbps = targetBitrate,
+            MaxBitrateMbps = maxBitrate,
+            Multipass = (MultipassMode)SettingsMultipass.SelectedIndex,
+            SpatialAq = SettingsSpatialAq.IsChecked == true,
+            TemporalAq = SettingsTemporalAq.IsChecked == true,
+            AqStrength = aqStrength,
+            PixelFormat = (VideoPixelFormat)SettingsPixelFormat.SelectedIndex,
+            FrameRate = FrameRateValues[Math.Clamp(SettingsFrameRate.SelectedIndex, 0, FrameRateValues.Length - 1)],
+            Deinterlace = SettingsDeinterlace.IsChecked == true,
+            AudioMode = (AudioEncodingMode)SettingsAudioMode.SelectedIndex,
+            AudioBitrateKbps = audioBitrate,
+            AudioSampleRate = AudioSampleRates[Math.Clamp(SettingsAudioSampleRate.SelectedIndex, 0, AudioSampleRates.Length - 1)],
+            AudioChannels = Math.Clamp(SettingsAudioChannels.SelectedIndex, 0, 2),
+            Container = (OutputContainer)SettingsContainer.SelectedIndex,
+            FastStart = SettingsFastStart.IsChecked == true
+        };
+        var errors = EncodingOptionValidator.Validate(options);
+        if (errors.Count == 0) return true;
+        error = string.Join(Environment.NewLine, errors);
+        return false;
+    }
+
+    private string _numericSettingError = "";
+    private bool TryReadInt(string text, string label, out int value)
+    {
+        if (int.TryParse(text, out value)) return true;
+        _numericSettingError = $"{label} must be a whole number.";
+        return false;
+    }
+
+    private void ApplyEncodingPreset_Click(object sender, RoutedEventArgs e)
+    {
+        if (SettingsEncodingPreset.SelectedIndex == (int)EncodingPreset.Custom)
+        {
+            SettingsMessage.Text = "Custom settings are already displayed; choose a named preset to replace them.";
+            return;
+        }
+        var preset = (EncodingPreset)Math.Clamp(SettingsEncodingPreset.SelectedIndex, 0, 3);
+        PopulateEncodingControls(EncodingPresetCatalog.Get(preset));
+        SettingsMessage.Text = $"{SettingsEncodingPreset.Text} preset loaded. Select Save Settings to apply it.";
+    }
     private void PopulateSettingsControls(AppSettings settings)
     {
         SettingsDefaultVideoFolder.Text = settings.DefaultVideoFolder;
@@ -160,6 +239,33 @@ public partial class MainWindow : Window
         SettingsRecoveryMode.SelectedIndex = (int)settings.DefaultRecovery;
         SettingsRecursive.IsChecked = settings.IncludeSubfolders;
         SettingsSkipExisting.IsChecked = settings.SkipExisting;
+        SettingsEncodingPreset.SelectedIndex = (int)settings.EncodingPreset;
+        PopulateEncodingControls(settings.Encoding);
+    }
+
+    private void PopulateEncodingControls(EncodingOptions options)
+    {
+        SettingsEncoderBackend.SelectedIndex = 0;
+        SettingsVideoCodec.SelectedIndex = (int)options.Codec;
+        SettingsContainer.SelectedIndex = (int)options.Container;
+        SettingsAudioMode.SelectedIndex = (int)options.AudioMode;
+        SettingsEncoderPreset.Text = options.EncoderPreset.ToString();
+        SettingsTune.SelectedIndex = (int)options.Tune;
+        SettingsRateControl.SelectedIndex = (int)options.RateControl;
+        SettingsMultipass.SelectedIndex = (int)options.Multipass;
+        SettingsQuality.Text = options.Quality.ToString();
+        SettingsTargetBitrate.Text = options.TargetBitrateMbps.ToString();
+        SettingsMaxBitrate.Text = options.MaxBitrateMbps.ToString();
+        SettingsAqStrength.Text = options.AqStrength.ToString();
+        SettingsPixelFormat.SelectedIndex = (int)options.PixelFormat;
+        SettingsFrameRate.SelectedIndex = Array.IndexOf(FrameRateValues, options.FrameRate) is var frameIndex && frameIndex >= 0 ? frameIndex : 0;
+        SettingsAudioBitrate.Text = options.AudioBitrateKbps.ToString();
+        SettingsAudioSampleRate.SelectedIndex = Array.IndexOf(AudioSampleRates, options.AudioSampleRate) is var sampleIndex && sampleIndex >= 0 ? sampleIndex : 0;
+        SettingsAudioChannels.SelectedIndex = options.AudioChannels;
+        SettingsDeinterlace.IsChecked = options.Deinterlace;
+        SettingsSpatialAq.IsChecked = options.SpatialAq;
+        SettingsTemporalAq.IsChecked = options.TemporalAq;
+        SettingsFastStart.IsChecked = options.FastStart;
     }
 
     private void ApplySettingsToBatch(AppSettings settings)
@@ -202,7 +308,7 @@ public partial class MainWindow : Window
 
             var recovery = (RecoveryStrategy)RecoveryMode.SelectedIndex;
             var resolution = (OutputResolution)Resolution.SelectedIndex;
-            outputRoot = EncodingPathPlanner.OutputRoot(InputFolder.Text, resolution, recovery);
+            outputRoot = EncodingPathPlanner.OutputRoot(InputFolder.Text, resolution, recovery, _settings.Encoding);
             Directory.CreateDirectory(outputRoot);
             batchStart = Stopwatch.StartNew();
             _batchStopwatch = batchStart;
@@ -220,13 +326,14 @@ public partial class MainWindow : Window
             AppendLog(BatchLogFormatter.Started(total, outputRoot, resolution, recovery, sourceDuration, startedAt));
             AppendDetailedLog($"LUT: {SelectedLutPath}");
             AppendDetailedLog($"Input folder: {InputFolder.Text}");
+            AppendDetailedLog($"Encoder: {_settings.Encoding.Codec} via NVIDIA NVENC; preset P{_settings.Encoding.EncoderPreset}; {_settings.Encoding.RateControl}; {_settings.Encoding.Container}");
             AppendDetailedLog($"Scanning subfolders: {(Recursive.IsChecked == true ? "Yes" : "No")}; skip completed files: {(SkipExisting.IsChecked == true ? "Yes" : "No")}");
 
             var completed = 0;
             foreach (var input in files)
             {
                 _cts.Token.ThrowIfCancellationRequested();
-                var job = EncodingPathPlanner.CreateJob(InputFolder.Text, outputRoot, input, resolution);
+                var job = EncodingPathPlanner.CreateJob(InputFolder.Text, outputRoot, input, resolution, _settings.Encoding.Container);
                 var outDir = Path.GetDirectoryName(job.OutputPath)!;
                 Directory.CreateDirectory(outDir);
                 var output = job.OutputPath;
@@ -252,7 +359,7 @@ public partial class MainWindow : Window
                 }
 
                 var detailedOutput = ShowEncodingDetails.IsChecked == true;
-                var args = FfmpegCommandBuilder.Encode(input, output, SelectedLutPath!, recovery, resolution, detailedOutput);
+                var args = FfmpegCommandBuilder.Encode(input, output, SelectedLutPath!, recovery, resolution, detailedOutput, _settings.Encoding);
                 if (detailedOutput) AppendLog($"[App] Starting FFmpeg: {FormatCommand(_ffmpeg!, args)}");
                 var exit = await RunFfmpegProgressAsync(args, durations[input], detailedOutput, p =>
                 {

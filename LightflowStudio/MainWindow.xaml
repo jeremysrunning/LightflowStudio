@@ -138,7 +138,7 @@
 
    <TabItem>
     <ScrollViewer VerticalScrollBarVisibility="Auto"><Grid Margin="28,24,28,28">
-     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
      <StackPanel Margin="2,0,0,20"><TextBlock Style="{StaticResource PageTitle}" Text="Settings"/><TextBlock Style="{StaticResource PageSubtitle}" Margin="0,5,0,0" Text="Choose the folders, tools, and defaults restored whenever the application starts."/></StackPanel>
      <Border Grid.Row="1" Style="{StaticResource Card}"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
       <TextBlock Grid.ColumnSpan="2" Style="{StaticResource SectionTitle}" Margin="4,0,4,12" Text="Folders"/>
@@ -151,8 +151,50 @@
       <StackPanel Grid.Row="1" Grid.Column="1" Margin="8,0,0,0"><TextBlock Style="{StaticResource FieldLabel}" Text="RECOVERY MODE"/><ComboBox x:Name="SettingsRecoveryMode"><ComboBoxItem Content="Normal"/><ComboBoxItem Content="Salvage audio + video"/><ComboBoxItem Content="Video only"/></ComboBox></StackPanel>
       <WrapPanel Grid.Row="2" Grid.ColumnSpan="2" Margin="4,8,0,0"><CheckBox x:Name="SettingsRecursive" Content="Include subfolders by default"/><CheckBox x:Name="SettingsSkipExisting" Content="Skip completed output files by default"/></WrapPanel>
      </Grid></Border>
-     <Border Grid.Row="3" Style="{StaticResource Card}"><StackPanel><TextBlock Style="{StaticResource SectionTitle}" Margin="4,0,4,12" Text="External Tools"/><TextBlock Style="{StaticResource FieldLabel}" Text="FFMPEG EXECUTABLE"/><DockPanel><Button DockPanel.Dock="Right" Content="Browse…" Click="BrowseSettingsFfmpeg_Click"/><TextBox x:Name="SettingsFfmpegPath"/></DockPanel><TextBlock Margin="6,5,4,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Text="Leave blank to use a bundled FFmpeg or the first copy available on PATH. FFprobe is detected beside FFmpeg or on PATH."/></StackPanel></Border>
-     <DockPanel Grid.Row="4" Margin="2,0"><TextBlock x:Name="SettingsMessage" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}"/><StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button Content="Restore Defaults" Click="ResetSettings_Click"/><Button Style="{StaticResource PrimaryButton}" Content="Save Settings" Click="SaveSettings_Click"/></StackPanel></DockPanel>
+     <Border Grid.Row="3" Style="{StaticResource Card}">
+      <StackPanel>
+       <TextBlock Style="{StaticResource SectionTitle}" Margin="4,0,4,4" Text="Encoding Quality"/>
+       <TextBlock Margin="4,0,4,12" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Text="Choose a named starting point, then fine-tune individual options. NVIDIA NVENC is available now; CPU, AMD, and Intel backends are reserved for later releases."/>
+       <DockPanel>
+        <Button DockPanel.Dock="Right" Content="Apply Preset" Click="ApplyEncodingPreset_Click"/>
+        <StackPanel><TextBlock Style="{StaticResource FieldLabel}" Text="NAMED PRESET"/><ComboBox x:Name="SettingsEncodingPreset"><ComboBoxItem Content="Recommended"/><ComboBoxItem Content="Maximum Quality"/><ComboBoxItem Content="Fast Preview"/><ComboBoxItem Content="Efficient HEVC"/><ComboBoxItem Content="Custom" IsEnabled="False"/></ComboBox></StackPanel>
+       </DockPanel>
+       <Grid Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <StackPanel><TextBlock Style="{StaticResource FieldLabel}" Text="ENCODER"/><ComboBox x:Name="SettingsEncoderBackend" IsEnabled="False"><ComboBoxItem Content="NVIDIA NVENC"/></ComboBox></StackPanel>
+        <StackPanel Grid.Column="1"><TextBlock Style="{StaticResource FieldLabel}" Text="VIDEO CODEC"/><ComboBox x:Name="SettingsVideoCodec"><ComboBoxItem Content="H.264"/><ComboBoxItem Content="HEVC (H.265)"/></ComboBox></StackPanel>
+        <StackPanel Grid.Column="2"><TextBlock Style="{StaticResource FieldLabel}" Text="CONTAINER"/><ComboBox x:Name="SettingsContainer"><ComboBoxItem Content="MP4"/><ComboBoxItem Content="MKV"/><ComboBoxItem Content="MOV"/></ComboBox></StackPanel>
+        <StackPanel Grid.Column="3"><TextBlock Style="{StaticResource FieldLabel}" Text="AUDIO"/><ComboBox x:Name="SettingsAudioMode"><ComboBoxItem Content="Copy source"/><ComboBoxItem Content="AAC"/><ComboBoxItem Content="No audio"/></ComboBox></StackPanel>
+       </Grid>
+       <Expander Margin="4,12,4,0" Header="Advanced encoding options" Foreground="{StaticResource TextBrush}">
+        <StackPanel Margin="0,8,0,0">
+         <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <StackPanel><TextBlock Style="{StaticResource FieldLabel}" Text="NVENC PRESET (P1–P7)"/><TextBox x:Name="SettingsEncoderPreset"/></StackPanel>
+          <StackPanel Grid.Column="1"><TextBlock Style="{StaticResource FieldLabel}" Text="TUNING"/><ComboBox x:Name="SettingsTune"><ComboBoxItem Content="High quality"/><ComboBoxItem Content="Low latency"/><ComboBoxItem Content="Ultra-low latency"/></ComboBox></StackPanel>
+          <StackPanel Grid.Column="2"><TextBlock Style="{StaticResource FieldLabel}" Text="RATE CONTROL"/><ComboBox x:Name="SettingsRateControl"><ComboBoxItem Content="Constant quality"/><ComboBoxItem Content="Variable bitrate"/><ComboBoxItem Content="Constant bitrate"/></ComboBox></StackPanel>
+          <StackPanel Grid.Column="3"><TextBlock Style="{StaticResource FieldLabel}" Text="MULTIPASS"/><ComboBox x:Name="SettingsMultipass"><ComboBoxItem Content="Disabled"/><ComboBoxItem Content="Quarter resolution"/><ComboBoxItem Content="Full resolution"/></ComboBox></StackPanel>
+         </Grid>
+         <Grid Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <StackPanel><TextBlock Style="{StaticResource FieldLabel}" Text="QUALITY (0–51)"/><TextBox x:Name="SettingsQuality"/></StackPanel>
+          <StackPanel Grid.Column="1"><TextBlock Style="{StaticResource FieldLabel}" Text="TARGET BITRATE (MBPS)"/><TextBox x:Name="SettingsTargetBitrate"/></StackPanel>
+          <StackPanel Grid.Column="2"><TextBlock Style="{StaticResource FieldLabel}" Text="MAX BITRATE (MBPS)"/><TextBox x:Name="SettingsMaxBitrate"/></StackPanel>
+          <StackPanel Grid.Column="3"><TextBlock Style="{StaticResource FieldLabel}" Text="AQ STRENGTH (1–15)"/><TextBox x:Name="SettingsAqStrength"/></StackPanel>
+         </Grid>
+         <Grid Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <StackPanel><TextBlock Style="{StaticResource FieldLabel}" Text="PIXEL FORMAT"/><ComboBox x:Name="SettingsPixelFormat"><ComboBoxItem Content="8-bit YUV 4:2:0"/><ComboBoxItem Content="10-bit P010 (HEVC)"/></ComboBox></StackPanel>
+          <StackPanel Grid.Column="1"><TextBlock Style="{StaticResource FieldLabel}" Text="FRAME RATE"/><ComboBox x:Name="SettingsFrameRate"><ComboBoxItem Content="Source"/><ComboBoxItem Content="23.976"/><ComboBoxItem Content="24"/><ComboBoxItem Content="25"/><ComboBoxItem Content="29.97"/><ComboBoxItem Content="30"/><ComboBoxItem Content="50"/><ComboBoxItem Content="59.94"/><ComboBoxItem Content="60"/></ComboBox></StackPanel>
+          <StackPanel Grid.Column="2"><TextBlock Style="{StaticResource FieldLabel}" Text="AAC BITRATE (KBPS)"/><TextBox x:Name="SettingsAudioBitrate"/></StackPanel>
+          <StackPanel Grid.Column="3"><TextBlock Style="{StaticResource FieldLabel}" Text="AUDIO SAMPLE RATE"/><ComboBox x:Name="SettingsAudioSampleRate"><ComboBoxItem Content="Source"/><ComboBoxItem Content="44.1 kHz"/><ComboBoxItem Content="48 kHz"/><ComboBoxItem Content="96 kHz"/></ComboBox></StackPanel>
+         </Grid>
+         <Grid Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="3*"/></Grid.ColumnDefinitions>
+          <StackPanel><TextBlock Style="{StaticResource FieldLabel}" Text="AUDIO CHANNELS"/><ComboBox x:Name="SettingsAudioChannels"><ComboBoxItem Content="Source"/><ComboBoxItem Content="Mono"/><ComboBoxItem Content="Stereo"/></ComboBox></StackPanel>
+          <WrapPanel Grid.Column="1" Margin="8,22,0,0"><CheckBox x:Name="SettingsDeinterlace" Content="Deinterlace"/><CheckBox x:Name="SettingsSpatialAq" Content="Spatial AQ"/><CheckBox x:Name="SettingsTemporalAq" Content="Temporal AQ"/><CheckBox x:Name="SettingsFastStart" Content="Fast start for MP4/MOV"/></WrapPanel>
+         </Grid>
+        </StackPanel>
+       </Expander>
+      </StackPanel>
+     </Border>
+     <Border Grid.Row="4" Style="{StaticResource Card}"><StackPanel><TextBlock Style="{StaticResource SectionTitle}" Margin="4,0,4,12" Text="External Tools"/><TextBlock Style="{StaticResource FieldLabel}" Text="FFMPEG EXECUTABLE"/><DockPanel><Button DockPanel.Dock="Right" Content="Browse…" Click="BrowseSettingsFfmpeg_Click"/><TextBox x:Name="SettingsFfmpegPath"/></DockPanel><TextBlock Margin="6,5,4,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Text="Leave blank to use a bundled FFmpeg or the first copy available on PATH. FFprobe is detected beside FFmpeg or on PATH."/></StackPanel></Border>
+     <DockPanel Grid.Row="5" Margin="2,0"><TextBlock x:Name="SettingsMessage" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}"/><StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button Content="Restore Defaults" Click="ResetSettings_Click"/><Button Style="{StaticResource PrimaryButton}" Content="Save Settings" Click="SaveSettings_Click"/></StackPanel></DockPanel>
     </Grid></ScrollViewer>
    </TabItem>
 
