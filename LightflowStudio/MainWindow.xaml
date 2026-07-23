@@ -49,7 +49,7 @@
         <TextBlock Grid.ColumnSpan="2" Style="{StaticResource SectionTitle}" Margin="4,0,4,12" Text="Batch Setup"/>
         <StackPanel Grid.Row="1" Grid.ColumnSpan="2">
          <TextBlock Style="{StaticResource FieldLabel}" Text="VIDEO FOLDER"/>
-         <DockPanel><Button DockPanel.Dock="Right" Content="Browse…" Click="BrowseInput_Click"/><TextBox x:Name="InputFolder" LostKeyboardFocus="InputFolder_LostKeyboardFocus"/></DockPanel>
+         <DockPanel><Button DockPanel.Dock="Right" Content="Browse…" Click="BrowseInput_Click"/><TextBox x:Name="InputFolder" TextChanged="InputFolder_TextChanged"/></DockPanel>
         </StackPanel>
         <Expander Grid.Row="2" Grid.ColumnSpan="2" Margin="4,10,4,2" IsExpanded="False">
          <Expander.Header>

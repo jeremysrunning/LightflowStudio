@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Windows;
+using System.Windows.Threading;
 using Forms = System.Windows.Forms;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using MessageBox = System.Windows.MessageBox;
@@ -23,6 +24,7 @@ public partial class MainWindow : Window
     private Process? _activeEncodingProcess;
     private readonly EncodingPauseController _encodingPause = new();
     private readonly ObservableCollection<BatchFileOption> _batchFiles = [];
+    private readonly DispatcherTimer _batchFolderRefreshTimer = new() { Interval = TimeSpan.FromMilliseconds(300) };
     private Stopwatch? _batchStopwatch;
     private bool _closeAfterCurrent;
     private bool _forceClose;
@@ -32,6 +34,11 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        _batchFolderRefreshTimer.Tick += (_, _) =>
+        {
+            _batchFolderRefreshTimer.Stop();
+            RefreshBatchFiles();
+        };
         SourceInitialized += (_, _) => WindowAppearance.EnableDarkTitleBar(this);
         _commandLineFolder = Environment.GetCommandLineArgs().Skip(1).FirstOrDefault(Directory.Exists);
         Loaded += (_, _) =>
@@ -70,7 +77,12 @@ public partial class MainWindow : Window
         RefreshBatchFiles();
     }
 
-    private void InputFolder_LostKeyboardFocus(object sender, System.Windows.Input.KeyboardFocusChangedEventArgs e) => RefreshBatchFiles();
+    private void InputFolder_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        _batchFolderRefreshTimer.Stop();
+        _batchFolderRefreshTimer.Start();
+    }
     private void Recursive_Changed(object sender, RoutedEventArgs e)
     {
         if (IsLoaded) RefreshBatchFiles();
@@ -82,6 +94,7 @@ public partial class MainWindow : Window
 
     private void RefreshBatchFiles()
     {
+        _batchFolderRefreshTimer.Stop();
         _batchFiles.Clear();
         foreach (var option in BatchFileSelection.Discover(InputFolder.Text, Recursive.IsChecked == true))
             _batchFiles.Add(option);
