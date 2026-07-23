@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     private Process? _activeEncodingProcess;
     private readonly EncodingPauseController _encodingPause = new();
     private readonly ObservableCollection<BatchFileOption> _batchFiles = [];
+    private readonly BatchFileSelectionMemory _batchSelectionMemory = new();
     private readonly DispatcherTimer _batchFolderRefreshTimer = new() { Interval = TimeSpan.FromMilliseconds(300) };
     private CancellationTokenSource? _batchMetadataCts;
     private Stopwatch? _batchStopwatch;
@@ -157,6 +158,7 @@ public partial class MainWindow : Window
         if (!IsLoaded) return;
         _batchFolderRefreshTimer.Stop();
         _batchMetadataCts?.Cancel();
+        RememberBatchFileSelection();
         _batchFiles.Clear();
         UpdateBatchFileSummary();
         _batchFolderRefreshTimer.Start();
@@ -166,13 +168,18 @@ public partial class MainWindow : Window
         if (IsLoaded) RefreshBatchFiles();
     }
     private void RefreshBatchFiles_Click(object sender, RoutedEventArgs e) => RefreshBatchFiles();
-    private void BatchFileSelection_Click(object sender, RoutedEventArgs e) => UpdateBatchFileSummary();
+    private void BatchFileSelection_Click(object sender, RoutedEventArgs e)
+    {
+        RememberBatchFileSelection();
+        UpdateBatchFileSummary();
+    }
     private void SelectAllBatchFiles_Click(object sender, RoutedEventArgs e) => SetBatchFileSelection(true);
     private void SelectNoBatchFiles_Click(object sender, RoutedEventArgs e) => SetBatchFileSelection(false);
 
     private void RefreshBatchFiles()
     {
         _batchFolderRefreshTimer.Stop();
+        RememberBatchFileSelection();
         _batchMetadataCts?.Cancel();
         _batchMetadataCts?.Dispose();
         _batchMetadataCts = new CancellationTokenSource();
@@ -196,6 +203,7 @@ public partial class MainWindow : Window
         catch (ArgumentException) { }
         foreach (var option in BatchFileSelection.Discover(InputFolder.Text, Recursive.IsChecked == true, excludedOutput, excludedSuffix))
             _batchFiles.Add(option);
+        _batchSelectionMemory.Apply(InputFolder.Text, _batchFiles);
         UpdateBatchFileSummary();
         _ = LoadBatchMetadataAsync(_batchFiles.ToList(), _batchMetadataCts.Token);
     }
@@ -239,7 +247,13 @@ public partial class MainWindow : Window
     private void SetBatchFileSelection(bool selected)
     {
         foreach (var option in _batchFiles) option.IsSelected = selected;
+        RememberBatchFileSelection();
         UpdateBatchFileSummary();
+    }
+
+    private void RememberBatchFileSelection()
+    {
+        if (_batchFiles.Count > 0) _batchSelectionMemory.Remember(InputFolder.Text, _batchFiles);
     }
 
     private void UpdateBatchFileSummary()
