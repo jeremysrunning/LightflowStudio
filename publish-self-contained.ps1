@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
-$project = Join-Path $PSScriptRoot "JeremyMediaToolkit\JeremyMediaToolkit.csproj"
-$publish = Join-Path $PSScriptRoot "publish\JeremyMediaToolkit-win-x64"
+$project = Join-Path $PSScriptRoot "LightflowStudio\LightflowStudio.csproj"
+$publish = Join-Path $PSScriptRoot "publish\LightflowStudio-win-x64"
 
 Write-Host "Publishing standalone Windows application..." -ForegroundColor Cyan
 dotnet publish $project -c Release -r win-x64 --self-contained true `

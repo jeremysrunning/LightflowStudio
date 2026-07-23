@@ -1,2 +1,2 @@
 $ErrorActionPreference = "Stop"
-dotnet run --project (Join-Path $PSScriptRoot "JeremyMediaToolkit\JeremyMediaToolkit.csproj")
+dotnet run --project (Join-Path $PSScriptRoot "LightflowStudio\LightflowStudio.csproj")
