@@ -118,6 +118,25 @@ public class UiLayoutTests
         Assert.Contains(document.Descendants(), element =>
             (string?)element.Attribute("Text") == "JEREMY RUNNING PHOTOGRAPHY");
     }
+    [Fact]
+    public void NavigationIconsAndLabels_AreVerticallyCenteredInAStableGrid()
+    {
+        var document = XDocument.Load(Path.Combine(FindRepositoryRoot(), "LightflowStudio", "MainWindow.xaml"));
+        var ns = document.Root!.Name.Namespace;
+        var navigation = Named(document, "Navigation");
+        var items = navigation.Elements(ns + "ListBoxItem").ToList();
+
+        Assert.Equal(5, items.Count);
+        foreach (var item in items)
+        {
+            var grid = item.Element(ns + "Grid")!;
+            var text = grid.Elements(ns + "TextBlock").ToList();
+            Assert.Equal("22", (string?)grid.Attribute("Height"));
+            Assert.All(text, element => Assert.Equal("Center", (string?)element.Attribute("VerticalAlignment")));
+            Assert.Equal("Center", (string?)text[0].Attribute("TextAlignment"));
+            Assert.Equal("Segoe UI Symbol", (string?)text[0].Attribute("FontFamily"));
+        }
+    }
     private static XElement Named(XDocument document, string name) =>
         document.Descendants().Single(element => element.Attributes().Any(attribute =>
             attribute.Name.LocalName == "Name" && attribute.Value == name));
